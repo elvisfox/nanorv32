@@ -97,6 +97,14 @@ r_type_insn(0b0000011, 0, regnum_ ## _rs, 0b110, regnum_ ## _rd, 0b0001011)
 #define picorv32_waitirq_insn(_rd) \
 r_type_insn(0b0000100, 0, 0, 0b100, regnum_ ## _rd, 0b0001011)
 
+#define picorv32_trigirq_insn(_rs) \
+r_type_insn(0b0001000, 0, regnum_ ## _rs, 0b100, 0, 0b0001011)
+
 #define picorv32_timer_insn(_rd, _rs) \
 r_type_insn(0b0000101, 0, regnum_ ## _rs, 0b110, regnum_ ## _rd, 0b0001011)
 
+#define picorv32_disirq_insn() \
+r_type_insn(0b0000110, 0, 0, 0b000, 0, 0b0001011)
+
+#define picorv32_enairq_insn() \
+r_type_insn(0b0000111, 0, 0, 0b000, 0, 0b0001011)
