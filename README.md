@@ -267,22 +267,22 @@ for a discussion of IRQs)
 
 #### ENABLE_IRQ_NESTED (default = 0)
 
-Set this to 1 to enable additional instructions `enairq, disirq, trigirq` and extend behavior
+Set this to 1 to enable additional instructions `enairq`, `disirq`, `trigirq` and extend behavior
 of the `retirq`. In this mode, the IRQs are disabled upon reset until the firmware enables
 them by executing `enairq`. The IRQ handler routine may again do `enairq`, enabling the nested
-interrupts, after storing `q0, q1` in stack upfront. The interrupt handler may also update
+interrupts, after storing `q0`, `q1` in stack upfront. The interrupt handler may also update
 the IRQ mask with `maskirq` instruction (storing the previous value in stack), thus implementing
 the interrupt priorities.
 
-The IRQ handler must execute `disirq` and restore `q0, q1` before executing `retirq`.
+The IRQ handler must execute `disirq` and restore `q0`, `q1` before executing `retirq`.
 The corresponding `eoi` output bits will reset based on `q1` register state upon `retirq`.
-Execution of `enairq, disirq` within the IRQ handler guarantees atomicity of the entry and exit
+Execution of `enairq`, `disirq` within the IRQ handler guarantees atomicity of the entry and exit
 sections of the routine.
 
 The easiest way to implement nested/prioritized interrupts is to use shared stack between
 application and interrupt routine.
 
-Support for `enairq, disirq` and `trigirq` is always disabled when ENABLE_IRQ is set to 0.
+Support for `enairq`, `disirq` and `trigirq` is always disabled when ENABLE_IRQ is set to 0.
 
 #### ENABLE_IRQ_QREGS (default = 1)
 
@@ -575,8 +575,9 @@ Example:
 Return from interrupt. This instruction copies the value from `q0`
 to the program counter and re-enables interrupts.
 
-With `ENABLE_IRQ_NESTED=1` this instruction resets those `eoi` signals
-which correspond to the logic 1 bits of `q1`.
+With ENABLE_IRQ_NESTED=1 this instruction resets only those `eoi` signals
+which correspond to the logic 1 bits of `q1`. Otherwise all `eoi` signals are
+reset.
 
     0000010 ----- 00000 --- 00000 0001011
     f7      rs2   rs    f3  rd    opcode
@@ -633,7 +634,7 @@ Example:
 
 Set pending interrupts using bitmask from `rs`. Will only have effect on the unmasked
 interrupts unless corresponding `LATCHED_IRQ` bits are set. This instruction is only
-available when `ENABLE_IRQ_NESTED=1`.
+available when ENABLE_IRQ_NESTED=1.
 
     0001000 ----- XXXXX --- ----- 0001011
     f7      rs2   rs    f3  rd    opcode
@@ -644,7 +645,7 @@ Example:
 
 #### enairq, disirq
 
-Enable/disable interrupts globally when `ENABLE_IRQ_NESTED=1`.
+Enable/disable interrupts globally when ENABLE_IRQ_NESTED is set to 1.
 
     000011X ----- ----- --- ----- 0001011
     f7      rs2   rs    f3  rd    opcode
