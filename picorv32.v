@@ -1106,7 +1106,7 @@ module picorv32 #(
 			instr_timer   <= mem_rdata_q[6:0] == 7'b0001011 && mem_rdata_q[31:25] == 7'b0000101 && ENABLE_IRQ && ENABLE_IRQ_TIMER;
 			instr_disirq  <= mem_rdata_q[6:0] == 7'b0001011 && mem_rdata_q[31:25] == 7'b0000110 && ENABLE_IRQ && ENABLE_IRQ_NESTED;
 			instr_enairq  <= mem_rdata_q[6:0] == 7'b0001011 && mem_rdata_q[31:25] == 7'b0000111 && ENABLE_IRQ && ENABLE_IRQ_NESTED;
-			instr_trigirq <= mem_rdata_q[6:0] == 7'b0001011 && mem_rdata_q[31:25] == 7'b0001000 && ENABLE_IRQ;
+			instr_trigirq <= mem_rdata_q[6:0] == 7'b0001011 && mem_rdata_q[31:25] == 7'b0001000 && ENABLE_IRQ && ENABLE_IRQ_NESTED;
 
 			is_slli_srli_srai <= is_alu_reg_imm && |{
 				mem_rdata_q[14:12] == 3'b001 && mem_rdata_q[31:25] == 7'b0000000,
@@ -1720,7 +1720,7 @@ module picorv32 #(
 						dbg_rs1val_valid <= 1;
 						cpu_state <= cpu_state_fetch;
 					end
-					ENABLE_IRQ && instr_trigirq: begin
+					ENABLE_IRQ && ENABLE_IRQ_NESTED && instr_trigirq: begin
 						// latched_store <= 1;
 						// reg_out <= irq_mask;
 						`debug($display("LD_RS1: %2d 0x%08x", decoded_rs1, cpuregs_rs1);)
