@@ -77,13 +77,12 @@ module picorv32 #(
 	parameter [ 0:0] ENABLE_FAST_MUL = 0,
 	parameter [ 0:0] ENABLE_DIV = 0,
 	parameter [ 0:0] MACHINE_ISA = 0,
-	parameter [ 0:0] ENABLE_MTIMER = 0,
 	parameter [ 0:0] ENABLE_CSR_MSCRATCH = 0,
 	parameter [ 0:0] ENABLE_CSR_MTVAL = 0,
 	// parameter [ 0:0] ENABLE_IRQ = 0,
 	// parameter [ 0:0] ENABLE_IRQ_NESTED = 0,
 	// parameter [ 0:0] ENABLE_IRQ_QREGS = 1,
-	// parameter [ 0:0] ENABLE_IRQ_TIMER = 1,
+	parameter [ 0:0] ENABLE_IRQ_TIMER = 1,
 	parameter [ 0:0] ENABLE_TRACE = 0,
 	parameter [ 0:0] REGS_INIT_ZERO = 0,
 	parameter [31:0] MASKED_IRQ = 32'h 0000_0000,
@@ -692,8 +691,9 @@ module picorv32 #(
 	reg instr_addi, instr_slti, instr_sltiu, instr_xori, instr_ori, instr_andi, instr_slli, instr_srli, instr_srai;
 	reg instr_add, instr_sub, instr_sll, instr_slt, instr_sltu, instr_xor, instr_srl, instr_sra, instr_or, instr_and;
 	reg instr_rdcycle, instr_rdcycleh, instr_rdinstr, instr_rdinstrh, instr_ecall_ebreak;
-	// reg instr_getq, instr_setq, instr_retirq, instr_maskirq, instr_waitirq, instr_timer;
+	// reg instr_getq, instr_setq, instr_retirq, instr_maskirq, instr_waitirq;
 	// reg instr_enairq, instr_disirq, instr_trigirq;
+	reg instr_timer;
 	reg instr_mret, instr_wfi;
 	reg instr_csrrw, instr_csrrs, instr_csrrc;
 	reg instr_csrrwi, instr_csrrsi, instr_csrrci;
@@ -729,8 +729,8 @@ module picorv32 #(
 			instr_lb, instr_lh, instr_lw, instr_lbu, instr_lhu, instr_sb, instr_sh, instr_sw,
 			instr_addi, instr_slti, instr_sltiu, instr_xori, instr_ori, instr_andi, instr_slli, instr_srli, instr_srai,
 			instr_add, instr_sub, instr_sll, instr_slt, instr_sltu, instr_xor, instr_srl, instr_sra, instr_or, instr_and,
-			instr_rdcycle, instr_rdcycleh, instr_rdinstr, instr_rdinstrh,
-			// instr_getq, instr_setq, instr_retirq, instr_maskirq, instr_waitirq, instr_timer,
+			instr_rdcycle, instr_rdcycleh, instr_rdinstr, instr_rdinstrh, instr_timer,
+			// instr_getq, instr_setq, instr_retirq, instr_maskirq, instr_waitirq,
 			// instr_enairq, instr_disirq, instr_trigirq
 			instr_mret, instr_wfi, instr_csrrw, instr_csrrs, instr_csrrc, instr_csrrwi, instr_csrrsi, instr_csrrci};
 
@@ -803,7 +803,7 @@ module picorv32 #(
 		// if (instr_retirq)   new_ascii_instr = "retirq";
 		// if (instr_maskirq)  new_ascii_instr = "maskirq";
 		// if (instr_waitirq)  new_ascii_instr = "waitirq";
-		// if (instr_timer)    new_ascii_instr = "timer";
+		if (instr_timer)    new_ascii_instr = "timer";
 		// if (instr_enairq)   new_ascii_instr = "enairq";
 		// if (instr_disirq)   new_ascii_instr = "disirq";
 		// if (instr_trigirq)  new_ascii_instr = "trigirq";
@@ -931,6 +931,13 @@ module picorv32 #(
 			instr_jalr    <= mem_rdata_latched[6:0] == 7'b1100111 && mem_rdata_latched[14:12] == 3'b000;
 			// instr_retirq  <= mem_rdata_latched[6:0] == 7'b0001011 && mem_rdata_latched[31:25] == 7'b0000010 && ENABLE_IRQ;
 			// instr_waitirq <= mem_rdata_latched[6:0] == 7'b0001011 && mem_rdata_latched[31:25] == 7'b0000100 && ENABLE_IRQ;
+
+			instr_mret		<= mem_rdata_latched[6:0] == 7'b1110011 && mem_rdata_latched[14:12] == 3'b000 &&
+							   mem_rdata_latched[31:20] == 12'b001100000010 && mem_rdata_latched[19:15] == 5'b00000 &&
+							   mem_rdata_latched[11:7] == 5'b00000 && MACHINE_ISA;
+			instr_wfi		<= mem_rdata_latched[6:0] == 7'b1110011 && mem_rdata_latched[14:12] == 3'b000 && 
+							   mem_rdata_latched[31:20] == 12'b001100000101 && mem_rdata_latched[19:15] == 5'b00000 &&
+							   mem_rdata_latched[11:7] == 5'b00000 && MACHINE_ISA;
 
 			is_beq_bne_blt_bge_bltu_bgeu <= mem_rdata_latched[6:0] == 7'b1100011;
 			is_lb_lh_lw_lbu_lhu          <= mem_rdata_latched[6:0] == 7'b0000011;
@@ -1161,15 +1168,11 @@ module picorv32 #(
 			// instr_getq    <= mem_rdata_q[6:0] == 7'b0001011 && mem_rdata_q[31:25] == 7'b0000000 && ENABLE_IRQ && ENABLE_IRQ_QREGS;
 			// instr_setq    <= mem_rdata_q[6:0] == 7'b0001011 && mem_rdata_q[31:25] == 7'b0000001 && ENABLE_IRQ && ENABLE_IRQ_QREGS;
 			// instr_maskirq <= mem_rdata_q[6:0] == 7'b0001011 && mem_rdata_q[31:25] == 7'b0000011 && ENABLE_IRQ;
-			// instr_timer   <= mem_rdata_q[6:0] == 7'b0001011 && mem_rdata_q[31:25] == 7'b0000101 && ENABLE_IRQ && ENABLE_IRQ_TIMER;
+			instr_timer   <= mem_rdata_q[6:0] == 7'b0001011 && mem_rdata_q[31:25] == 7'b0000101 && MACHINE_ISA && ENABLE_IRQ_TIMER;
 			// instr_disirq  <= mem_rdata_q[6:0] == 7'b0001011 && mem_rdata_q[31:25] == 7'b0000110 && ENABLE_IRQ && ENABLE_IRQ_NESTED;
 			// instr_enairq  <= mem_rdata_q[6:0] == 7'b0001011 && mem_rdata_q[31:25] == 7'b0000111 && ENABLE_IRQ && ENABLE_IRQ_NESTED;
 			// instr_trigirq <= mem_rdata_q[6:0] == 7'b0001011 && mem_rdata_q[31:25] == 7'b0001000 && ENABLE_IRQ && ENABLE_IRQ_NESTED;
 
-			instr_mret		<= mem_rdata_q[6:0] == 7'b1110011 && mem_rdata_q[14:12] == 3'b000 && mem_rdata_q[31:20] == 12'b001100000010 && 
-							   mem_rdata_q[19:15] == 5'b00000 && mem_rdata_q[11:7] == 5'b00000 && MACHINE_ISA;
-			instr_wfi		<= mem_rdata_q[6:0] == 7'b1110011 && mem_rdata_q[14:12] == 3'b000 && mem_rdata_q[31:20] == 12'b001100000101 && 
-							   mem_rdata_q[19:15] == 5'b00000 && mem_rdata_q[11:7] == 5'b00000 && MACHINE_ISA;
 			instr_csrrw		<= mem_rdata_q[6:0] == 7'b1110011 && mem_rdata_q[14:12] == 3'b001 && MACHINE_ISA;
 			instr_csrrs		<= mem_rdata_q[6:0] == 7'b1110011 && mem_rdata_q[14:12] == 3'b010 && MACHINE_ISA;
 			instr_csrrc		<= mem_rdata_q[6:0] == 7'b1110011 && mem_rdata_q[14:12] == 3'b011 && MACHINE_ISA;
@@ -1250,7 +1253,7 @@ module picorv32 #(
 				is_sb_sh_sw:
 					decoded_imm <= $signed({mem_rdata_q[31:25], mem_rdata_q[11:7]});
 				is_csrrwi_csrrsi_csrrci:
-					decoded_imm <= {27'h000_0000, mem_rdata[19:15]};//32'd1 << mem_rdata[19:15];
+					decoded_imm <= {27'h000_0000, mem_rdata_q[19:15]};//32'd1 << mem_rdata[19:15];
 				default:
 					decoded_imm <= 1'bx;
 			endcase
@@ -1535,6 +1538,7 @@ module picorv32 #(
 				latched_branch <= 1'b1;
 				latched_store <= 1'b1;
 				reg_out <= PROGADDR_IRQ;
+				mem_do_prefetch <= 1'b0;
 			end
 			else
 				cpu_state <= cpu_state_trap;
@@ -1556,9 +1560,6 @@ module picorv32 #(
 		alu_wait_2 <= 0;
 
 		csr_data = 32'hxxxx_xxxx;
-
-		// External interrupt pending bit
-		mip[M_IRQ_EXTERNAL] <= irq_pending & irq_mask;
 
 		if (launch_next_insn) begin
 			dbg_rs1val <= 'bx;
@@ -1586,9 +1587,9 @@ module picorv32 #(
 
 		next_irq_pending = MACHINE_ISA ? irq_pending & LATCHED_IRQ : 'bx;
 
-		// if (ENABLE_IRQ && ENABLE_IRQ_TIMER && timer) begin
-		// 	timer <= timer - 1;
-		// end
+		if (MACHINE_ISA && ENABLE_IRQ_TIMER && timer) begin
+			timer <= timer - 1;
+		end
 
 		decoder_trigger <= mem_do_rinst && mem_done;
 		decoder_trigger_q <= decoder_trigger;
@@ -1968,15 +1969,15 @@ module picorv32 #(
 					// 	mstatus_mie <= 1'b0;
 					// 	cpu_state <= cpu_state_fetch;
 					// end
-					// ENABLE_IRQ && ENABLE_IRQ_TIMER && instr_timer: begin
-					// 	latched_store <= 1;
-					// 	reg_out <= timer;
-					// 	`debug($display("LD_RS1: %2d 0x%08x", decoded_rs1, cpuregs_rs1);)
-					// 	timer <= cpuregs_rs1;
-					// 	dbg_rs1val <= cpuregs_rs1;
-					// 	dbg_rs1val_valid <= 1;
-					// 	cpu_state <= cpu_state_fetch;
-					// end
+					MACHINE_ISA && ENABLE_IRQ_TIMER && instr_timer: begin
+						latched_store <= 1;
+						reg_out <= timer;
+						`debug($display("LD_RS1: %2d 0x%08x", decoded_rs1, cpuregs_rs1);)
+						timer <= cpuregs_rs1;
+						dbg_rs1val <= cpuregs_rs1;
+						dbg_rs1val_valid <= 1;
+						cpu_state <= cpu_state_fetch;
+					end
 					is_lb_lh_lw_lbu_lhu && !instr_trap: begin
 						`debug($display("LD_RS1: %2d 0x%08x", decoded_rs1, cpuregs_rs1);)
 						reg_op1 <= cpuregs_rs1;
@@ -2202,10 +2203,17 @@ module picorv32 #(
 
 		// if (ENABLE_IRQ) begin
 		next_irq_pending = next_irq_pending | irq;
-			// if(ENABLE_IRQ_TIMER && timer)
-			// 	if (timer - 1 == 0)
-			// 		next_irq_pending[irq_timer] = 1;
-		// end
+
+		// External interrupt pending bit
+		mip[M_IRQ_EXTERNAL] <= |(irq_pending & irq_mask);
+		
+		// Timer interrupt pending bit
+		if(MACHINE_ISA && ENABLE_IRQ_TIMER) begin
+			if (timer - 1 == 0)
+				mip[M_IRQ_TIMER] <= 1'b1;
+		end
+		else
+			mip[M_IRQ_TIMER] <= 1'b0;
 
 		if (CATCH_MISALIGN && resetn && (mem_do_rdata || mem_do_wdata)) begin
 			if (mem_wordsize == 0 && reg_op1[1:0] != 0) begin
