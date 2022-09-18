@@ -940,7 +940,7 @@ module nanorv32 #(
 							   mem_rdata_latched[31:20] == 12'b001100000010 && mem_rdata_latched[19:15] == 5'b00000 &&
 							   mem_rdata_latched[11:7] == 5'b00000 && MACHINE_ISA;
 			instr_wfi		<= mem_rdata_latched[6:0] == 7'b1110011 && mem_rdata_latched[14:12] == 3'b000 && 
-							   mem_rdata_latched[31:20] == 12'b001100000101 && mem_rdata_latched[19:15] == 5'b00000 &&
+							   mem_rdata_latched[31:20] == 12'b000100000101 && mem_rdata_latched[19:15] == 5'b00000 &&
 							   mem_rdata_latched[11:7] == 5'b00000 && MACHINE_ISA;
 
 			is_beq_bne_blt_bge_bltu_bgeu <= mem_rdata_latched[6:0] == 7'b1100011;
