@@ -5,16 +5,16 @@
 // binary, for any purpose, commercial or non-commercial, and by any
 // means.
 
-#define ENABLE_QREGS
+#define ENABLE_CSR_MSCRATCH
 #define ENABLE_HELLO
 #define ENABLE_RVTST
 #define ENABLE_SIEVE
 #define ENABLE_MULTST
 #define ENABLE_STATS
 
-#ifndef ENABLE_QREGS
-#  undef ENABLE_RVTST
-#endif
+// #ifndef ENABLE_QREGS
+// #  undef ENABLE_RVTST
+// #endif
 
 // Only save registers in IRQ wrapper that are to be saved by the caller in
 // the RISC-V ABI, with the excpetion of the stack pointer. The IRQ handler
@@ -37,11 +37,11 @@
 	.global hard_rem
 	.global hard_remu
 	.global stats
+	.global clear_bits_mip
+	.global clear_bits_custom_irq_pend
 
 reset_vec:
 	// no more than 16 bytes here !
-	picorv32_waitirq_insn(zero)
-	picorv32_maskirq_insn(zero, zero)
 	j start
 
 
@@ -52,22 +52,35 @@ reset_vec:
 irq_vec:
 	/* save registers */
 
-#ifdef ENABLE_QREGS
+	# picorv32_setq_insn(q2, x1)
+	# picorv32_setq_insn(q3, x2)
 
-	picorv32_setq_insn(q2, x1)
-	picorv32_setq_insn(q3, x2)
+#ifdef ENABLE_CSR_MSCRATCH
+	// Store ra in mscratch
+	csrw mscratch, x1
+#else
+	// Store ra directly in application stack
+	addi sp, sp, -4
+	sw x1, 0*4(sp)
+#endif
 
+	// ra = &irq_regs
 	lui x1, %hi(irq_regs)
 	addi x1, x1, %lo(irq_regs)
 
-	picorv32_getq_insn(x2, q0)
-	sw x2,   0*4(x1)
+	// Store sp
+	sw sp, 0*4(x1)
 
-	picorv32_getq_insn(x2, q2)
-	sw x2,   1*4(x1)
+	# picorv32_getq_insn(x2, q0)
+	# sw x2,   0*4(x1)
 
-	picorv32_getq_insn(x2, q3)
-	sw x2,   2*4(x1)
+	# picorv32_getq_insn(x2, q2)
+	# sw x2,   1*4(x1)
+
+	# picorv32_getq_insn(x2, q3)
+	# sw x2,   2*4(x1)
+
+	
 
 #ifdef ENABLE_FASTIRQ
 	sw x5,   5*4(x1)
@@ -117,64 +130,6 @@ irq_vec:
 	sw x31, 31*4(x1)
 #endif
 
-#else // ENABLE_QREGS
-
-#ifdef ENABLE_FASTIRQ
-	sw gp,   0*4+0x200(zero)
-	sw x1,   1*4+0x200(zero)
-	sw x2,   2*4+0x200(zero)
-	sw x5,   5*4+0x200(zero)
-	sw x6,   6*4+0x200(zero)
-	sw x7,   7*4+0x200(zero)
-	sw x10, 10*4+0x200(zero)
-	sw x11, 11*4+0x200(zero)
-	sw x12, 12*4+0x200(zero)
-	sw x13, 13*4+0x200(zero)
-	sw x14, 14*4+0x200(zero)
-	sw x15, 15*4+0x200(zero)
-	sw x16, 16*4+0x200(zero)
-	sw x17, 17*4+0x200(zero)
-	sw x28, 28*4+0x200(zero)
-	sw x29, 29*4+0x200(zero)
-	sw x30, 30*4+0x200(zero)
-	sw x31, 31*4+0x200(zero)
-#else
-	sw gp,   0*4+0x200(zero)
-	sw x1,   1*4+0x200(zero)
-	sw x2,   2*4+0x200(zero)
-	sw x3,   3*4+0x200(zero)
-	sw x4,   4*4+0x200(zero)
-	sw x5,   5*4+0x200(zero)
-	sw x6,   6*4+0x200(zero)
-	sw x7,   7*4+0x200(zero)
-	sw x8,   8*4+0x200(zero)
-	sw x9,   9*4+0x200(zero)
-	sw x10, 10*4+0x200(zero)
-	sw x11, 11*4+0x200(zero)
-	sw x12, 12*4+0x200(zero)
-	sw x13, 13*4+0x200(zero)
-	sw x14, 14*4+0x200(zero)
-	sw x15, 15*4+0x200(zero)
-	sw x16, 16*4+0x200(zero)
-	sw x17, 17*4+0x200(zero)
-	sw x18, 18*4+0x200(zero)
-	sw x19, 19*4+0x200(zero)
-	sw x20, 20*4+0x200(zero)
-	sw x21, 21*4+0x200(zero)
-	sw x22, 22*4+0x200(zero)
-	sw x23, 23*4+0x200(zero)
-	sw x24, 24*4+0x200(zero)
-	sw x25, 25*4+0x200(zero)
-	sw x26, 26*4+0x200(zero)
-	sw x27, 27*4+0x200(zero)
-	sw x28, 28*4+0x200(zero)
-	sw x29, 29*4+0x200(zero)
-	sw x30, 30*4+0x200(zero)
-	sw x31, 31*4+0x200(zero)
-#endif
-
-#endif // ENABLE_QREGS
-
 	/* call interrupt handler C function */
 
 	lui sp, %hi(irq_stack)
@@ -185,30 +140,34 @@ irq_vec:
 	addi a0, a0, %lo(irq_regs)
 
 	// arg1 = interrupt type
-#ifdef ENABLE_QREGS
+/* #ifdef ENABLE_QREGS
 	picorv32_getq_insn(a1, q1)
-#else
+ #else
 	addi a1, tp, 0
-#endif
+#endif*/
+
+	// arg1 = mip
+	csrr a1, mip
+
+	// arg2 = custom_csr_irq_pend
+	csrr a2, csr_custom_irq_pend
 
 	// call to C function
 	jal ra, irq
 
 	/* restore registers */
 
-#ifdef ENABLE_QREGS
-
 	// new irq_regs address returned from C code in a0
 	addi x1, a0, 0
 
-	lw x2,   0*4(x1)
-	picorv32_setq_insn(q0, x2)
+	# lw x2,   0*4(x1)
+	# picorv32_setq_insn(q0, x2)
 
-	lw x2,   1*4(x1)
-	picorv32_setq_insn(q1, x2)
+	# lw x2,   1*4(x1)
+	# picorv32_setq_insn(q1, x2)
 
-	lw x2,   2*4(x1)
-	picorv32_setq_insn(q2, x2)
+	# lw x2,   2*4(x1)
+	# picorv32_setq_insn(q2, x2)
 
 #ifdef ENABLE_FASTIRQ
 	lw x5,   5*4(x1)
@@ -258,78 +217,26 @@ irq_vec:
 	lw x31, 31*4(x1)
 #endif
 
-	picorv32_getq_insn(x1, q1)
-	picorv32_getq_insn(x2, q2)
+	// Restore sp
+	lw sp, 0*4(x1)
 
-#else // ENABLE_QREGS
-
-	// new irq_regs address returned from C code in a0
-	addi a1, zero, 0x200
-	beq a0, a1, 1f
-	ebreak
-1:
-
-#ifdef ENABLE_FASTIRQ
-	lw gp,   0*4+0x200(zero)
-	lw x1,   1*4+0x200(zero)
-	lw x2,   2*4+0x200(zero)
-	lw x5,   5*4+0x200(zero)
-	lw x6,   6*4+0x200(zero)
-	lw x7,   7*4+0x200(zero)
-	lw x10, 10*4+0x200(zero)
-	lw x11, 11*4+0x200(zero)
-	lw x12, 12*4+0x200(zero)
-	lw x13, 13*4+0x200(zero)
-	lw x14, 14*4+0x200(zero)
-	lw x15, 15*4+0x200(zero)
-	lw x16, 16*4+0x200(zero)
-	lw x17, 17*4+0x200(zero)
-	lw x28, 28*4+0x200(zero)
-	lw x29, 29*4+0x200(zero)
-	lw x30, 30*4+0x200(zero)
-	lw x31, 31*4+0x200(zero)
+#ifdef ENABLE_CSR_MSCRATCH
+	// Restore ra from mscratch
+	csrr x1, mscratch
 #else
-	lw gp,   0*4+0x200(zero)
-	lw x1,   1*4+0x200(zero)
-	lw x2,   2*4+0x200(zero)
-	// do not restore x3 (gp)
-	lw x4,   4*4+0x200(zero)
-	lw x5,   5*4+0x200(zero)
-	lw x6,   6*4+0x200(zero)
-	lw x7,   7*4+0x200(zero)
-	lw x8,   8*4+0x200(zero)
-	lw x9,   9*4+0x200(zero)
-	lw x10, 10*4+0x200(zero)
-	lw x11, 11*4+0x200(zero)
-	lw x12, 12*4+0x200(zero)
-	lw x13, 13*4+0x200(zero)
-	lw x14, 14*4+0x200(zero)
-	lw x15, 15*4+0x200(zero)
-	lw x16, 16*4+0x200(zero)
-	lw x17, 17*4+0x200(zero)
-	lw x18, 18*4+0x200(zero)
-	lw x19, 19*4+0x200(zero)
-	lw x20, 20*4+0x200(zero)
-	lw x21, 21*4+0x200(zero)
-	lw x22, 22*4+0x200(zero)
-	lw x23, 23*4+0x200(zero)
-	lw x24, 24*4+0x200(zero)
-	lw x25, 25*4+0x200(zero)
-	lw x26, 26*4+0x200(zero)
-	lw x27, 27*4+0x200(zero)
-	lw x28, 28*4+0x200(zero)
-	lw x29, 29*4+0x200(zero)
-	lw x30, 30*4+0x200(zero)
-	lw x31, 31*4+0x200(zero)
+	// Restore ra from application stack
+	lw x1, 0*4(sp)
+	addi sp, sp, 4
 #endif
 
-#endif // ENABLE_QREGS
+	# picorv32_getq_insn(x1, q1)
+	# picorv32_getq_insn(x2, q2)
 
-	picorv32_retirq_insn()
+	mret
 
-#ifndef ENABLE_QREGS
-.balign 0x200
-#endif
+# #ifndef ENABLE_QREGS
+# .balign 0x200
+# #endif
 irq_regs:
 	// registers are saved to this memory region during interrupt handling
 	// the program counter is saved as register 0
@@ -339,13 +246,38 @@ irq_regs:
 	.fill 128,4
 irq_stack:
 
+// routines to access CSR from C code
+clear_bits_mip:
+	csrc mip, a0
+	ret
+
+clear_bits_custom_irq_pend:
+	csrc csr_custom_irq_pend, a0
+	ret
+
 
 /* Main program
  **********************************/
 
 start:
-	/* zero-initialize all registers */
+	// Enable external and timer interrupts
+	lui x1, %hi(0x880)
+	addi x1, x1, %lo(0x880)
+	csrw mie, x1
 
+	// Enable all external interrupts
+	addi x1, zero, -1		// x1 = 0xffff_ffff
+	csrw csr_custom_irq_mask, x1
+
+	// wait irq
+	wfi
+	# picorv32_waitirq_insn(zero)
+	# picorv32_maskirq_insn(zero, zero)
+
+	// global enable IRQ handling
+	csrwi mstatus, 8		// mie = 1
+
+	/* zero-initialize all registers */
 	addi x1, zero, 0
 	addi x2, zero, 0
 	addi x3, zero, 0

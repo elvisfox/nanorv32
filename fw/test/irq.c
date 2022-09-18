@@ -7,7 +7,7 @@
 
 #include "firmware.h"
 
-uint32_t *irq(uint32_t *regs, uint32_t irqs)
+uint32_t *irq(uint32_t *regs, uint32_t mip, uint32_t irqs)
 {
 	static unsigned int ext_irq_4_count = 0;
 	static unsigned int ext_irq_5_count = 0;
@@ -32,21 +32,26 @@ uint32_t *irq(uint32_t *regs, uint32_t irqs)
 			print_str("\n");
 			__asm__ volatile ("ebreak");
 		}
+
+		clear_bits_custom_irq_pend(6);
 	}
 
 	if ((irqs & (1<<4)) != 0) {
 		ext_irq_4_count++;
 		// print_str("[EXT-IRQ-4]");
+		clear_bits_custom_irq_pend(1<<4);
 	}
 
 	if ((irqs & (1<<5)) != 0) {
 		ext_irq_5_count++;
 		// print_str("[EXT-IRQ-5]");
+		clear_bits_custom_irq_pend(1<<5);
 	}
 
-	if ((irqs & 1) != 0) {
+	if ((mip & M_IRQ_TIMER) != 0) {
 		timer_irq_count++;
 		// print_str("[TIMER-IRQ]");
+		clear_bits_mip(M_IRQ_TIMER);
 	}
 
 	if ((irqs & 6) != 0)
@@ -131,6 +136,8 @@ uint32_t *irq(uint32_t *regs, uint32_t irqs)
 		print_str("Number of timer IRQs counted: ");
 		print_dec(timer_irq_count);
 		print_str("\n");
+
+		clear_bits_custom_irq_pend(6);
 
 		__asm__ volatile ("ebreak");
 	}

@@ -107,7 +107,7 @@ COMPRESSED_ISA = C
 # synth.v: picorv32.v scripts/yosys/synth_sim.ys
 # 	yosys -qv3 -l synth.log scripts/yosys/synth_sim.ys
 
-all: bin/test/firmware.memh
+all: bin/test/firmware.memh bin/test/firmware.lss
 
 %.memh: %.bin utils/makehex.py
 	$(PYTHON) utils/makehex.py $< 32768 > $@
@@ -115,6 +115,9 @@ all: bin/test/firmware.memh
 %.bin: %.elf
 	$(TOOLCHAIN_PREFIX)objcopy -O binary $< $@
 	chmod -x $@
+
+%.lss: %.elf
+	$(TOOLCHAIN_PREFIX)objdump -S $< > $@
 
 bin/test/firmware.elf: $(TEST_FW_OBJS) $(TEST_OBJS) fw/test/sections.lds
 	$(TOOLCHAIN_PREFIX)gcc -Os -mabi=ilp32 -march=rv32im$(subst C,c,$(COMPRESSED_ISA)) -ffreestanding -nostdlib -o $@ \

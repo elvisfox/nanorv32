@@ -11,8 +11,17 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+// mie, mip bits definition
+#define	M_IRQ_SOFTWARE						(1U << 3)
+#define	M_IRQ_TIMER							(1U << 7)
+#define	M_IRQ_EXTERNAL						(1U << 11)
+
+// start.S
+extern void clear_bits_mip(uint32_t val);
+extern void clear_bits_custom_irq_pend(uint32_t val);
+
 // irq.c
-uint32_t *irq(uint32_t *regs, uint32_t irqs);
+uint32_t *irq(uint32_t *regs, uint32_t mip, uint32_t irqs);
 
 // print.c
 void print_chr(char ch);
