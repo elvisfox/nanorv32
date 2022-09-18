@@ -44,7 +44,7 @@ module testbench;
 		end
 	end
 
-	picorv32 #(
+	nanorv32 #(
 	) uut (
 		.clk         (clk        ),
 		.resetn      (resetn     ),
