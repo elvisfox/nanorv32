@@ -154,7 +154,7 @@ module nanorv32_wrapper #(
 		if (mem_valid && !mem_ready) begin
 			// 0000_0000..0001_FFFF - Memory access
 			if (mem_addr < 128*1024) begin
-				mem_ready <= 1;
+				mem_ready <= 1'b1;
 				mem_rdata <= memory[mem_addr >> 2];
 				if (mem_wstrb[0]) memory[mem_addr >> 2][ 7: 0] <= mem_wdata[ 7: 0];
 				if (mem_wstrb[1]) memory[mem_addr >> 2][15: 8] <= mem_wdata[15: 8];
@@ -163,27 +163,36 @@ module nanorv32_wrapper #(
 			end
 
 			// 1000_0000 - Output
-			else if (mem_addr == 32'h1000_0000) begin
-				if (VERBOSE) begin
-					if (32 <= mem_wdata && mem_wdata < 128)
-						$display("OUT: '%c'", mem_wdata[7:0]);
-					else
-						$display("OUT: %3d", mem_wdata);
-				end
-				else begin
-					$write("%c", mem_wdata[7:0]);
+			else if(mem_addr == 32'h1000_0000) begin
+				if(mem_wstrb[0]) begin
+					if(VERBOSE) begin
+						if(32 <= mem_wdata && mem_wdata < 128)
+							$display("OUT: '%c'", mem_wdata[7:0]);
+						else
+							$display("OUT: %3d", mem_wdata);
+					end
+					else begin
+						$write("%c", mem_wdata[7:0]);
 `ifndef VERILATOR
-					$fflush();
+						$fflush();
 `endif
+					end
 				end
+				mem_rdata <= 0;
+				mem_ready <= 1'b1;
 			end
 
 			// 2000_0000 - tests passed marker
-			else if (mem_addr == 32'h2000_0000) begin
-				if (mem_wdata == 123456789)
+			else if(mem_addr == 32'h2000_0000) begin
+				if (mem_wdata == 123456789 && mem_wstrb == 4'b1111)
 					tests_passed = 1'b1;
-			end else begin
-				$display("OUT-OF-BOUNDS MEMORY WRITE TO %08x", mem_wdata);
+				mem_rdata <= 0;
+				mem_ready <= 1'b1;
+			end
+			
+			// Invalid address?
+			else begin
+				$display("OUT-OF-BOUNDS MEMORY ACCESS TO %08x, wstrb=%04b", mem_wdata, mem_wstrb);
 				$finish;
 			end
 		end

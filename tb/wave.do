@@ -29,6 +29,10 @@ add wave -noupdate -expand -group CSR /testbench/top/uut/mscratch
 add wave -noupdate -expand -group CSR /testbench/top/uut/irq_mask
 add wave -noupdate -expand -group CSR /testbench/top/uut/irq_pending
 add wave -noupdate -expand -group Instruction /testbench/top/uut/reg_pc
+add wave -noupdate -expand -group Instruction -radix ascii /testbench/top/uut/dbg_ascii_state
+add wave -noupdate -expand -group Instruction -radix hexadecimal /testbench/top/uut/mem_rdata_latched
+add wave -noupdate -expand -group Instruction /testbench/top/uut/mem_done
+add wave -noupdate -expand -group Instruction /testbench/top/uut/instr_wfi
 add wave -noupdate -expand -group Instruction -radix ascii /testbench/top/uut/dbg_ascii_instr
 add wave -noupdate -expand -group Instruction /testbench/top/uut/dbg_insn_imm
 add wave -noupdate -expand -group Instruction /testbench/top/uut/dbg_insn_rs1
@@ -39,7 +43,7 @@ add wave -noupdate -expand -group Instruction /testbench/top/uut/dbg_rs2val
 add wave -noupdate -expand -group Instruction /testbench/top/uut/dbg_rs1val_valid
 add wave -noupdate -expand -group Instruction /testbench/top/uut/dbg_rs2val_valid
 TreeUpdate [SetDefaultTree]
-WaveRestoreCursors {{Cursor 1} {998320 ps} 0}
+WaveRestoreCursors {{Cursor 1} {1299230 ps} 0}
 quietly wave cursor active 1
 configure wave -namecolwidth 238
 configure wave -valuecolwidth 100
@@ -53,6 +57,6 @@ configure wave -gridoffset 0
 configure wave -gridperiod 1
 configure wave -griddelta 40
 configure wave -timeline 0
-configure wave -timelineunits ps
+configure wave -timelineunits us
 update
-WaveRestoreZoom {918870 ps} {1523820 ps}
+WaveRestoreZoom {0 ps} {2100 ns}
