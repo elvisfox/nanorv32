@@ -17,6 +17,11 @@ add wave -noupdate -expand -group {IO bus} /testbench/top/mem_addr
 add wave -noupdate -expand -group {IO bus} /testbench/top/mem_wdata
 add wave -noupdate -expand -group {IO bus} /testbench/top/mem_wstrb
 add wave -noupdate -expand -group {IO bus} /testbench/top/mem_rdata
+add wave -noupdate -expand -group {Memory Interface} /testbench/top/uut/mem_do_prefetch
+add wave -noupdate -expand -group {Memory Interface} /testbench/top/uut/mem_do_rinst
+add wave -noupdate -expand -group {Memory Interface} /testbench/top/uut/mem_do_rdata
+add wave -noupdate -expand -group {Memory Interface} /testbench/top/uut/mem_do_wdata
+add wave -noupdate -expand -group {Memory Interface} /testbench/top/uut/mem_err_misaligned
 add wave -noupdate -expand -group CSR /testbench/top/uut/mstatus_mie
 add wave -noupdate -expand -group CSR /testbench/top/uut/mstatus_mpie
 add wave -noupdate -expand -group CSR /testbench/top/uut/mie
@@ -28,6 +33,8 @@ add wave -noupdate -expand -group CSR /testbench/top/uut/mtval
 add wave -noupdate -expand -group CSR /testbench/top/uut/mscratch
 add wave -noupdate -expand -group CSR /testbench/top/uut/irq_mask
 add wave -noupdate -expand -group CSR /testbench/top/uut/irq_pending
+add wave -noupdate -expand -group CSR /testbench/top/uut/mtrap
+add wave -noupdate -expand -group CSR /testbench/top/uut/mtrap_prev
 add wave -noupdate -expand -group Instruction /testbench/top/uut/reg_pc
 add wave -noupdate -expand -group Instruction -radix ascii /testbench/top/uut/dbg_ascii_state
 add wave -noupdate -expand -group Instruction -radix hexadecimal /testbench/top/uut/mem_rdata_latched
@@ -43,7 +50,7 @@ add wave -noupdate -expand -group Instruction /testbench/top/uut/dbg_rs2val
 add wave -noupdate -expand -group Instruction /testbench/top/uut/dbg_rs1val_valid
 add wave -noupdate -expand -group Instruction /testbench/top/uut/dbg_rs2val_valid
 TreeUpdate [SetDefaultTree]
-WaveRestoreCursors {{Cursor 1} {1299230 ps} 0}
+WaveRestoreCursors {{Cursor 1} {980260 ps} 0}
 quietly wave cursor active 1
 configure wave -namecolwidth 238
 configure wave -valuecolwidth 100
@@ -59,4 +66,4 @@ configure wave -griddelta 40
 configure wave -timeline 0
 configure wave -timelineunits us
 update
-WaveRestoreZoom {0 ps} {2100 ns}
+WaveRestoreZoom {933730 ps} {1083230 ps}

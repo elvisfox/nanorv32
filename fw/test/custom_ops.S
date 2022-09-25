@@ -80,8 +80,9 @@
 #define regnum_fp   8
 
 // CSRs
-#define csr_custom_irq_mask 0x7C0
-#define csr_custom_irq_pend 0x7C1
+#define csr_custom_irq_mask		0x7C0
+#define csr_custom_irq_pend		0x7C1
+#define csr_custom_trap			0x7C2
 
 #define r_type_insn(_f7, _rs2, _rs1, _f3, _rd, _opc) \
 .word (((_f7) << 25) | ((_rs2) << 20) | ((_rs1) << 15) | ((_f3) << 12) | ((_rd) << 7) | ((_opc) << 0))

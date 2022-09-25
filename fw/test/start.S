@@ -64,6 +64,13 @@ irq_vec:
 	sw x1, 0*4(sp)
 #endif
 
+	// Is it a trap?
+	csrr ra, csr_custom_trap
+	andi ra, ra, 1		// mask mtrap bit
+	beqz ra, not_a_trap
+	ebreak				// don't handle the trap, stop CPU
+
+not_a_trap:
 	// ra = &irq_regs
 	lui x1, %hi(irq_regs)
 	addi x1, x1, %lo(irq_regs)
@@ -235,6 +242,7 @@ irq_vec:
 	mret
 
 # #ifndef ENABLE_QREGS
+# FIXME: uncomment the line below in order to prevent misalignment trap
 # .balign 0x200
 # #endif
 irq_regs:
