@@ -48,15 +48,14 @@
 			$display("ASSERTION FAILED in %m"); \
 			$stop; \
 		end \
-	end \
-	empty_statement
+	end
 `else
   `ifdef DEBUGNETS
     `define FORMAL_KEEP (* keep *)
   `else
     `define FORMAL_KEEP
   `endif
-  `define assert(assert_expr) empty_statement
+  `define assert(assert_expr) empty_statement;
 `endif
 
 // uncomment this for register file in extra module
@@ -116,8 +115,8 @@ module nanorv32 #(
 	input      [31:0] mem_rdata,
 
 	// Look-Ahead Interface
-	output            mem_la_read,
-	output            mem_la_write,
+	output reg        mem_la_read,
+	output reg        mem_la_write,
 	output     [31:0] mem_la_addr,
 	output reg [31:0] mem_la_wdata,
 	output reg [ 3:0] mem_la_wstrb,
@@ -252,13 +251,6 @@ module nanorv32 #(
 	reg [31:0] irq_mask;
 	reg [31:0] irq_pending;
 	reg [31:0] timer;
-
-	// generate
-		// FIXME
-		// if(ENABLE_IRQ_NESTED)
-			// always @(*)
-			// 	irq_active = ~mstatus_mie;
-	// endgenerate
 
 `ifndef PICORV32_REGS
 	reg [31:0] cpuregs [0:regfile_size-1];
@@ -444,10 +436,9 @@ module nanorv32 #(
 		((mem_xfer && |mem_state && (mem_do_rinst || mem_do_rdata || mem_do_wdata)) || (&mem_state && mem_do_rinst)) &&
 		(!mem_la_firstword || (~&mem_rdata_latched[1:0] && mem_xfer)) );
 
-	// FIXME: integrate new mem_err_misaligned login into LA memory interface
-	assign mem_la_write = resetn && !mem_state && mem_do_wdata;
-	assign mem_la_read = resetn && ((!mem_la_use_prefetched_high_word && !mem_state && (mem_do_rinst || mem_do_prefetch || mem_do_rdata)) ||
-			(COMPRESSED_ISA && mem_xfer && (!last_mem_valid ? mem_la_firstword : mem_la_firstword_reg) && !mem_la_secondword && &mem_rdata_latched[1:0]));
+	// assign mem_la_write = resetn && !mem_state && mem_do_wdata;
+	// assign mem_la_read = resetn && ((!mem_la_use_prefetched_high_word && !mem_state && (mem_do_rinst || mem_do_prefetch || mem_do_rdata)) ||
+	// 		(COMPRESSED_ISA && mem_xfer && (!last_mem_valid ? mem_la_firstword : mem_la_firstword_reg) && !mem_la_secondword && &mem_rdata_latched[1:0]));
 	assign mem_la_addr = (mem_do_prefetch || mem_do_rinst) ? {next_pc[31:2] + mem_la_firstword_xfer, 2'b00} : {reg_op1[31:2], 2'b00};
 
 	assign mem_rdata_latched_noshuffle = (mem_xfer || LATCHED_MEM_RDATA) ? mem_rdata : mem_rdata_q;
@@ -455,6 +446,39 @@ module nanorv32 #(
 	assign mem_rdata_latched = COMPRESSED_ISA && mem_la_use_prefetched_high_word ? {16'bx, mem_16bit_buffer} :
 			COMPRESSED_ISA && mem_la_secondword ? {mem_rdata_latched_noshuffle[15:0], mem_16bit_buffer} :
 			COMPRESSED_ISA && mem_la_firstword ? {16'bx, mem_rdata_latched_noshuffle[31:16]} : mem_rdata_latched_noshuffle;
+
+	reg mem_err_misaligned_comb;
+
+	always @* begin
+		mem_la_read = 1'b0;
+		mem_la_write = 1'b0;
+		mem_err_misaligned_comb = 1'b0;
+		if(resetn && !trap) begin
+			case(mem_state)
+				MEM_STATE_IDLE: begin
+					if(CATCH_MISALIGN && (mem_do_rdata || mem_do_wdata) && 
+					   ((mem_wordsize == 0 && reg_op1[1:0] != 0) || (mem_wordsize == 1 && reg_op1[0] != 0)) )
+						mem_err_misaligned_comb = 1'b1;
+
+					else if (CATCH_MISALIGN && (mem_do_prefetch || mem_do_rinst) &&
+					         (COMPRESSED_ISA ? next_pc[0] : |next_pc[1:0]))
+						mem_err_misaligned_comb = 1'b1;
+
+					else begin
+						mem_la_read = !mem_la_use_prefetched_high_word && 
+							(mem_do_prefetch || mem_do_rinst || mem_do_rdata);
+						mem_la_write = mem_do_wdata;
+					end
+				end
+
+				MEM_STATE_READ: begin
+					mem_la_read = COMPRESSED_ISA && mem_xfer && 
+						(!last_mem_valid ? mem_la_firstword : mem_la_firstword_reg) && 
+						!mem_la_secondword && &mem_rdata_latched[1:0];
+				end
+			endcase
+		end
+	end
 
 	always @(posedge clk) begin
 		if (!resetn) begin
@@ -615,19 +639,19 @@ module nanorv32 #(
 	always @(posedge clk) begin
 		if (resetn && !trap) begin
 			if (mem_do_prefetch || mem_do_rinst || mem_do_rdata)
-				`assert(!mem_do_wdata);
+				`assert(!mem_do_wdata)
 
 			if (mem_do_prefetch || mem_do_rinst)
-				`assert(!mem_do_rdata);
+				`assert(!mem_do_rdata)
 
 			if (mem_do_rdata)
-				`assert(!mem_do_prefetch && !mem_do_rinst);
+				`assert(!mem_do_prefetch && !mem_do_rinst)
 
 			if (mem_do_wdata)
-				`assert(!(mem_do_prefetch || mem_do_rinst || mem_do_rdata));
+				`assert(!(mem_do_prefetch || mem_do_rinst || mem_do_rdata))
 
 			if (mem_state == MEM_STATE_WRITE || mem_state == MEM_STATE_WAIT_FETCH)
-				`assert(mem_valid || mem_do_prefetch);
+				`assert(mem_valid || mem_do_prefetch)
 		end
 	end
 
@@ -651,19 +675,18 @@ module nanorv32 #(
 			end
 			case (mem_state)
 				MEM_STATE_IDLE: begin
-					if (CATCH_MISALIGN && (mem_do_rdata || mem_do_wdata) && mem_wordsize == 0 && reg_op1[1:0] != 0) begin
-						`debug($display("MISALIGNED WORD: 0x%08x", reg_op1);)
-						mem_err_misaligned <= !mem_err_misaligned;
-					end
+					if(mem_err_misaligned_comb) begin
+						if(mem_do_rdata || mem_do_wdata) begin
+							case(mem_wordsize)
+								0:			`debug($display("MISALIGNED WORD: 0x%08x", reg_op1);)
+								1:			`debug($display("MISALIGNED HALFWORD: 0x%08x", reg_op1);)
+								default:	`assert(0)
+							endcase
+						end
+						if(mem_do_prefetch || mem_do_rinst)
+							`debug($display("MISALIGNED INSTRUCTION: 0x%08x", next_pc);)
 
-					else if (CATCH_MISALIGN && (mem_do_rdata || mem_do_wdata) && mem_wordsize == 1 && reg_op1[0] != 0) begin
-						`debug($display("MISALIGNED HALFWORD: 0x%08x", reg_op1);)
-						mem_err_misaligned <= !mem_err_misaligned;
-					end
-
-					else if (CATCH_MISALIGN && (mem_do_prefetch || mem_do_rinst) && (COMPRESSED_ISA ? next_pc[0] : |next_pc[1:0])) begin
-						`debug($display("MISALIGNED INSTRUCTION: 0x%08x", next_pc);)
-						mem_err_misaligned <= mem_do_rinst && !mem_err_misaligned;
+						mem_err_misaligned <= !mem_err_misaligned && (!mem_do_prefetch || mem_do_rinst);
 					end
 
 					else begin
@@ -682,10 +705,10 @@ module nanorv32 #(
 				end
 
 				MEM_STATE_READ: begin
-					`assert(mem_wstrb == 0);
-					`assert(mem_do_prefetch || mem_do_rinst || mem_do_rdata);
-					`assert(mem_valid == !mem_la_use_prefetched_high_word);
-					`assert(mem_instr == (mem_do_prefetch || mem_do_rinst));
+					`assert(mem_wstrb == 0)
+					`assert(mem_do_prefetch || mem_do_rinst || mem_do_rdata)
+					`assert(mem_valid == !mem_la_use_prefetched_high_word)
+					`assert(mem_instr == (mem_do_prefetch || mem_do_rinst))
 					if (mem_xfer) begin
 						if (COMPRESSED_ISA && mem_la_read) begin
 							mem_valid <= 1;
@@ -709,8 +732,8 @@ module nanorv32 #(
 				end
 
 				MEM_STATE_WRITE: begin
-					`assert(mem_wstrb != 0);
-					`assert(mem_do_wdata);
+					`assert(mem_wstrb != 0)
+					`assert(mem_do_wdata)
 					if (mem_xfer) begin
 						mem_valid <= 0;
 						mem_state <= MEM_STATE_IDLE;
@@ -718,8 +741,8 @@ module nanorv32 #(
 				end
 
 				MEM_STATE_WAIT_FETCH: begin
-					`assert(mem_wstrb == 0);
-					`assert(mem_do_prefetch);
+					`assert(mem_wstrb == 0)
+					`assert(mem_do_prefetch)
 					if (mem_do_rinst) begin
 						mem_state <= MEM_STATE_IDLE;
 					end
@@ -1395,6 +1418,8 @@ module nanorv32 #(
 	reg [regindex_bits-1:0] latched_rd;
 
 	reg [31:0] current_pc;
+
+	// next_pc is only used by memory interface, where LSBs are masked and misalign is handled if enabled
 	assign next_pc = latched_store && latched_branch ? reg_out /*& ~1*/ : reg_next_pc;
 
 	reg [3:0] pcpi_timeout_counter;
@@ -1734,6 +1759,8 @@ module nanorv32 #(
 					latched_branch: begin
 						current_pc = latched_store ? (latched_stalu ? alu_out_q : reg_out) /*& ~1*/ : reg_next_pc;
 						`debug($display("ST_RD:  %2d 0x%08x, BRANCH 0x%08x", latched_rd, reg_pc + (latched_compr ? 2 : 4), current_pc);)
+						if (!CATCH_MISALIGN)
+							current_pc = current_pc & (COMPRESSED_ISA ? ~1 : ~3);
 					end
 					latched_store && !latched_branch: begin
 						`debug($display("ST_RD:  %2d 0x%08x", latched_rd, latched_stalu ? alu_out_q : reg_out);)
@@ -1772,7 +1799,7 @@ module nanorv32 #(
 				latched_rd <= decoded_rd;
 				latched_compr <= compressed_instr;
 
-				if((mem_do_prefetch || mem_do_rinst) && mem_err_misaligned) begin
+				if(mem_do_rinst && mem_err_misaligned) begin
 					do_trap(4'd0);		// instruction address misaligned
 					decoder_trigger <= 1'b0;
 				end
@@ -1835,7 +1862,8 @@ module nanorv32 #(
 				end
 			end
 
-			cpu1 <= 'bx;
+			cpu_state_ld_rs1: begin
+				reg_op1 <= 'bx;
 				reg_op2 <= 'bx;
 
 				(* parallel_case *)
@@ -1919,7 +1947,7 @@ module nanorv32 #(
 					MACHINE_ISA && instr_mret: begin
 						mstatus_mie <= mstatus_mpie;
 						mstatus_mpie <= 1'b1;
-						reg_out <= CATCH_MISALIGN ? (mepc & 32'h fffffffe) : mepc;
+						reg_out <= mepc;
 						latched_store <= 1'b1;
 						latched_branch <= 1'b1;
 						cpu_state <= cpu_state_fetch;
@@ -2503,8 +2531,7 @@ module nanorv32 #(
 `endif
 
 	// Formal Verification
-//FIXME: failed assertions in LA memory interface
-`ifdef FORMAL_FIXME
+`ifdef FORMAL
 	reg [3:0] last_mem_nowait;
 	always @(posedge clk)
 		last_mem_nowait <= {last_mem_nowait, mem_ready || !mem_valid};
@@ -2525,7 +2552,7 @@ module nanorv32 #(
 		if (resetn) begin
 			// instruction fetches are read-only
 			if (mem_valid && mem_instr)
-				`assert (mem_wstrb == 0);
+				`assert (mem_wstrb == 0)
 
 			// cpu_state must be valid
 			ok = 0;
@@ -2537,7 +2564,7 @@ module nanorv32 #(
 			if (cpu_state == cpu_state_shift)  ok = 1;
 			if (cpu_state == cpu_state_stmem)  ok = 1;
 			if (cpu_state == cpu_state_ldmem)  ok = 1;
-			`assert (ok);
+			`assert (ok)
 		end
 	end
 
@@ -2555,18 +2582,18 @@ module nanorv32 #(
 		last_mem_la_wstrb <= mem_la_wstrb;
 
 		if (last_mem_la_read) begin
-			`assert(mem_valid);
-			`assert(mem_addr == last_mem_la_addr);
-			`assert(mem_wstrb == 0);
+			`assert(mem_valid)
+			`assert(mem_addr == last_mem_la_addr)
+			`assert(mem_wstrb == 0)
 		end
 		if (last_mem_la_write) begin
-			`assert(mem_valid);
-			`assert(mem_addr == last_mem_la_addr);
-			`assert(mem_wdata == last_mem_la_wdata);
-			`assert(mem_wstrb == last_mem_la_wstrb);
+			`assert(mem_valid)
+			`assert(mem_addr == last_mem_la_addr)
+			`assert(mem_wdata == last_mem_la_wdata)
+			`assert(mem_wstrb == last_mem_la_wstrb)
 		end
 		if (mem_la_read || mem_la_write) begin
-			`assert(!mem_valid || mem_ready);
+			`assert(!mem_valid || mem_ready)
 		end
 	end
 `endif
