@@ -16,12 +16,13 @@ TEST_OBJS = $(addprefix bin/test/tests/,$(addsuffix .o,$(basename $(notdir $(wil
 TEST_FW_OBJS = \
 	bin/test/start.o \
 	bin/test/irq.o \
+	bin/test/trap.o \
 	bin/test/print.o \
 	bin/test/hello.o \
 	bin/test/sieve.o \
 	bin/test/multest.o \
 	bin/test/stats.o
-GCC_WARNS  = -Werror -Wall -Wextra -Wshadow -Wundef -Wpointer-arith -Wcast-qual -Wcast-align -Wwrite-strings
+GCC_WARNS  = -Wall -Wextra -Wshadow -Wundef -Wpointer-arith -Wcast-qual -Wcast-align -Wwrite-strings
 GCC_WARNS += -Wredundant-decls -Wstrict-prototypes -Wmissing-prototypes -pedantic # -Wconversion
 TOOLCHAIN_PREFIX = riscv64-unknown-elf-
 COMPRESSED_ISA = C

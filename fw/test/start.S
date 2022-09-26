@@ -25,6 +25,7 @@
 
 	.section .text
 	.global irq
+	.global trap
 	.global hello
 	.global sieve
 	.global multest
@@ -64,13 +65,6 @@ irq_vec:
 	sw x1, 0*4(sp)
 #endif
 
-	// Is it a trap?
-	csrr ra, csr_custom_trap
-	andi ra, ra, 1		// mask mtrap bit
-	beqz ra, not_a_trap
-	ebreak				// don't handle the trap, stop CPU
-
-not_a_trap:
 	// ra = &irq_regs
 	lui x1, %hi(irq_regs)
 	addi x1, x1, %lo(irq_regs)
@@ -142,6 +136,52 @@ not_a_trap:
 	lui sp, %hi(irq_stack)
 	addi sp, sp, %lo(irq_stack)
 
+	// Is it a trap?
+	csrr ra, csr_custom_trap
+	andi ra, ra, 1		// mask mtrap bit
+	beqz ra, not_a_trap
+
+	// call trap handler
+	csrr a0, mepc
+	csrr a1, mcause
+	csrr a2, mtval
+
+	jal ra, trap
+
+	// if return value is not zero, consider trap correctly handled
+	bnez a0, trap_handled
+
+	// stop CPU
+	ebreak
+
+trap_handled:
+	// ok, trap handled, clear mtrap and return
+
+	// mtrap_prev = 0
+	csrci csr_custom_trap, 2
+
+	// check whether trapped instruction is a compressed one
+	csrr x1, mepc
+	lh x2, 0(ra)
+	andi x2, x2, 3		// mask op[1:0]
+	addi x3, zero, 3
+	bne x2, x3, not_compressed
+	addi x1, x1, 2
+
+not_compressed:
+	addi x1, x1, 2
+
+	// x1 contains pointer to the next instruction
+	csrw mepc, x1
+
+	// Proceed to recalling registers
+	lui x1, %hi(irq_regs)
+	addi x1, x1, %lo(irq_regs)
+	j irq_vec_end
+
+not_a_trap:
+	// It's a normal IRQ
+
 	// arg0 = address of regs
 	lui a0, %hi(irq_regs)
 	addi a0, a0, %lo(irq_regs)
@@ -172,7 +212,7 @@ not_a_trap:
 
 	# lw x2,   1*4(x1)
 	# picorv32_setq_insn(q1, x2)
-
+irq_vec_end:
 	# lw x2,   2*4(x1)
 	# picorv32_setq_insn(q2, x2)
 
@@ -370,6 +410,8 @@ start:
 	TEST(sb)
 	TEST(sh)
 	TEST(sw)
+
+	TEST(misalign)
 
 	TEST(addi)
 	TEST(slti) // also tests sltiu
