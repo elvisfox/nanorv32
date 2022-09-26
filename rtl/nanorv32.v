@@ -705,10 +705,10 @@ module nanorv32 #(
 				end
 
 				MEM_STATE_READ: begin
-					`assert(mem_wstrb == 0)
+					`assert(mem_wstrb === 0)
 					`assert(mem_do_prefetch || mem_do_rinst || mem_do_rdata)
-					`assert(mem_valid == !mem_la_use_prefetched_high_word)
-					`assert(mem_instr == (mem_do_prefetch || mem_do_rinst))
+					`assert(mem_valid === !mem_la_use_prefetched_high_word)
+					`assert(mem_instr === (mem_do_prefetch || mem_do_rinst))
 					if (mem_xfer) begin
 						if (COMPRESSED_ISA && mem_la_read) begin
 							mem_valid <= 1;
@@ -1613,7 +1613,7 @@ module nanorv32 #(
 	reg mtrap;
 	reg mtrap_prev;
 
-	task do_trap(input [3:0] code);
+	task do_trap(input [3:0] code, input [31:0] mtval_value);
 		begin
 			if(MACHINE_ISA) begin
 				if(!mtrap) begin
@@ -1625,11 +1625,13 @@ module nanorv32 #(
 						mtrap_prev <= mtrap;
 						mcause_irq <= 1'b0;
 						mcause_code <= code;
+						mtval <= mtval_value;
 						// reg_next_pc <= PROGADDR_IRQ;
 						mepc <= reg_pc;
 						mstatus_mie <= 1'b0;
 						mstatus_mpie <= mstatus_mie;
 						cpu_state <= cpu_state_fetch;
+						latched_rd <= 0;
 						latched_branch <= 1'b1;
 						latched_store <= 1'b1;
 						reg_out <= PROGADDR_IRQ;
@@ -1800,7 +1802,7 @@ module nanorv32 #(
 				latched_compr <= compressed_instr;
 
 				if(mem_do_rinst && mem_err_misaligned) begin
-					do_trap(4'd0);		// instruction address misaligned
+					do_trap(4'd0, reg_pc);		// instruction address misaligned
 					decoder_trigger <= 1'b0;
 				end
 
@@ -1893,14 +1895,14 @@ module nanorv32 #(
 									`debug($display("EBREAK OR UNSUPPORTED INSN AT 0x%08x", reg_pc);)
 									mem_do_rinst <= mem_do_prefetch;	// complete previous prefetch first
 									decoder_trigger <= 1'b0;
-									do_trap(4'd2);						// illegal instruction
+									do_trap(4'd2, reg_pc);						// illegal instruction
 								end
 							end else begin
 								cpu_state <= cpu_state_ld_rs2;
 							end
 						end else begin
 							`debug($display("EBREAK OR UNSUPPORTED INSN AT 0x%08x", reg_pc);)
-							do_trap(4'd2);		// illegal instruction
+							do_trap(4'd2, reg_pc);		// illegal instruction
 						end
 					end
 					ENABLE_COUNTERS && is_rdcycle_rdcycleh_rdinstr_rdinstrh: begin
@@ -1927,56 +1929,14 @@ module nanorv32 #(
 							mem_do_rinst <= mem_do_prefetch;
 						cpu_state <= cpu_state_exec;
 					end
-					// ENABLE_IRQ && ENABLE_IRQ_QREGS && instr_getq: begin
-					// 	`debug($display("LD_RS1: %2d 0x%08x", decoded_rs1, cpuregs_rs1);)
-					// 	reg_out <= cpuregs_rs1;
-					// 	dbg_rs1val <= cpuregs_rs1;
-					// 	dbg_rs1val_valid <= 1;
-					// 	latched_store <= 1;
-					// 	cpu_state <= cpu_state_fetch;
-					// end
-					// ENABLE_IRQ && ENABLE_IRQ_QREGS && instr_setq: begin
-					// 	`debug($display("LD_RS1: %2d 0x%08x", decoded_rs1, cpuregs_rs1);)
-					// 	reg_out <= cpuregs_rs1;
-					// 	dbg_rs1val <= cpuregs_rs1;
-					// 	dbg_rs1val_valid <= 1;
-					// 	latched_rd <= latched_rd | irqregs_offset;
-					// 	latched_store <= 1;
-					// 	cpu_state <= cpu_state_fetch;
-					// end
 					MACHINE_ISA && instr_mret: begin
 						mstatus_mie <= mstatus_mpie;
 						mstatus_mpie <= 1'b1;
 						reg_out <= mepc;
 						latched_store <= 1'b1;
-						latched_branch <= 1'b1;
+						latched_branch <= 1'b1;		// instr_mret has decoded_rd = 0
 						cpu_state <= cpu_state_fetch;
 						mtrap <= mtrap_prev;
-						// `debug($display("LD_RS1: %2d 0x%08x", decoded_rs1, cpuregs_rs1);)
-						// dbg_rs1val <= cpuregs_rs1;
-						// dbg_rs1val_valid <= 1;
-						// if (ENABLE_IRQ_NESTED) begin
-						// 	if(ENABLE_REGS_DUALPORT) begin
-						// 		eoi <= eoi & ~cpuregs_rs2;
-						// 		mstatus_mie <= 1'b1;
-						// 		reg_out <= CATCH_MISALIGN ? (cpuregs_rs1 & 32'h fffffffe) : cpuregs_rs1;
-						// 		latched_branch <= 1;
-						// 		latched_store <= 1;
-						// 		cpu_state <= cpu_state_fetch;
-						// 	end
-						// 	else begin
-						// 		reg_op1 <= cpuregs_rs1;
-						// 		cpu_state <= cpu_state_ld_rs2;
-						// 	end
-						// end
-						// else begin
-						// 	eoi <= 0;
-						// 	irq_active <= 1'b0;
-						// 	reg_out <= CATCH_MISALIGN ? (cpuregs_rs1 & 32'h fffffffe) : cpuregs_rs1;
-						// 	latched_branch <= 1;
-						// 	latched_store <= 1;
-						// 	cpu_state <= cpu_state_fetch;
-						// end
 					end
 					MACHINE_ISA && (instr_csrrw || instr_csrrs || instr_csrrc || instr_csrrwi || instr_csrrsi || instr_csrrci): begin
 						// rs1
@@ -2190,7 +2150,7 @@ module nanorv32 #(
 						if (CATCH_ILLINSN && (pcpi_timeout || instr_ecall_ebreak)) begin
 							pcpi_valid <= 0;
 							`debug($display("EBREAK OR UNSUPPORTED INSN AT 0x%08x", reg_pc);)
-							do_trap(4'd2);		// illegal instruction
+							do_trap(4'd2, reg_pc);		// illegal instruction
 						end
 					end
 					is_sb_sh_sw: begin
@@ -2295,7 +2255,7 @@ module nanorv32 #(
 							decoder_pseudo_trigger <= 1;
 						end
 						else
-							do_trap(4'd6);		// store address misaligned
+							do_trap(4'd6, reg_op1);		// store address misaligned
 					end
 				end
 			end
@@ -2335,7 +2295,7 @@ module nanorv32 #(
 							cpu_state <= cpu_state_fetch;
 						end
 						else
-							do_trap(4'd4);		// load address misaligned
+							do_trap(4'd4, reg_op1);		// load address misaligned
 					end
 				end
 			end

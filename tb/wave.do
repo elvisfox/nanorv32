@@ -58,8 +58,9 @@ add wave -noupdate -expand -group Instruction /testbench/top/uut/latched_store
 add wave -noupdate -expand -group Instruction /testbench/top/uut/latched_branch
 add wave -noupdate -expand -group Instruction /testbench/top/uut/reg_out
 add wave -noupdate -expand -group Instruction /testbench/top/uut/next_pc
+add wave -noupdate -expand -group Instruction -expand /testbench/top/uut/cpuregs
 TreeUpdate [SetDefaultTree]
-WaveRestoreCursors {{Cursor 1} {83325500 ps} 0}
+WaveRestoreCursors {{Cursor 1} {452121340 ps} 0}
 quietly wave cursor active 1
 configure wave -namecolwidth 238
 configure wave -valuecolwidth 100
@@ -75,4 +76,4 @@ configure wave -griddelta 40
 configure wave -timeline 0
 configure wave -timelineunits us
 update
-WaveRestoreZoom {82949340 ps} {84041570 ps}
+WaveRestoreZoom {451938290 ps} {452431370 ps}
