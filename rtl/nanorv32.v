@@ -36,7 +36,7 @@
 `ifdef DEBUG
   `define debug(debug_command) debug_command
 `else
-  `define debug(debug_command)
+  `define debug(debug_command) empty_statement;
 `endif
 
 `ifdef FORMAL
@@ -2556,14 +2556,14 @@ module nanorv32 #(
 
 			// cpu_state must be valid
 			ok = 0;
-			if (cpu_state == cpu_state_trap)   ok = 1;
-			if (cpu_state == cpu_state_fetch)  ok = 1;
-			if (cpu_state == cpu_state_ld_rs1) ok = 1;
-			if (cpu_state == cpu_state_ld_rs2) ok = !ENABLE_REGS_DUALPORT;
-			if (cpu_state == cpu_state_exec)   ok = 1;
-			if (cpu_state == cpu_state_shift)  ok = 1;
-			if (cpu_state == cpu_state_stmem)  ok = 1;
-			if (cpu_state == cpu_state_ldmem)  ok = 1;
+			if (cpu_state === cpu_state_trap)   ok = 1;
+			if (cpu_state === cpu_state_fetch)  ok = 1;
+			if (cpu_state === cpu_state_ld_rs1) ok = 1;
+			if (cpu_state === cpu_state_ld_rs2) ok = !ENABLE_REGS_DUALPORT;
+			if (cpu_state === cpu_state_exec)   ok = 1;
+			if (cpu_state === cpu_state_shift)  ok = 1;
+			if (cpu_state === cpu_state_stmem)  ok = 1;
+			if (cpu_state === cpu_state_ldmem)  ok = 1;
 			`assert (ok)
 		end
 	end
@@ -2583,14 +2583,14 @@ module nanorv32 #(
 
 		if (last_mem_la_read) begin
 			`assert(mem_valid)
-			`assert(mem_addr == last_mem_la_addr)
-			`assert(mem_wstrb == 0)
+			`assert(mem_addr === last_mem_la_addr)
+			`assert(mem_wstrb === 0)
 		end
 		if (last_mem_la_write) begin
 			`assert(mem_valid)
-			`assert(mem_addr == last_mem_la_addr)
-			`assert(mem_wdata == last_mem_la_wdata)
-			`assert(mem_wstrb == last_mem_la_wstrb)
+			`assert(mem_addr === last_mem_la_addr)
+			`assert(mem_wdata === last_mem_la_wdata)
+			`assert(mem_wstrb === last_mem_la_wstrb)
 		end
 		if (mem_la_read || mem_la_write) begin
 			`assert(!mem_valid || mem_ready)

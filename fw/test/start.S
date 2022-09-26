@@ -242,8 +242,7 @@ not_a_trap:
 	mret
 
 # #ifndef ENABLE_QREGS
-# FIXME: uncomment the line below in order to prevent misalignment trap
-# .balign 0x200
+.balign 0x200
 # #endif
 irq_regs:
 	// registers are saved to this memory region during interrupt handling
@@ -277,6 +276,13 @@ start:
 	addi x1, zero, -1		// x1 = 0xffff_ffff
 	csrw csr_custom_irq_mask, x1
 
+	// Test instruction misalignment detection
+# 	lui x1, %hi(misaligned_jump)
+# 	addi x1, x1, %lo(misaligned_jump)
+# 	addi x1, x1, 1
+# 	jr x1
+
+# misaligned_jump:
 	// wait irq
 	wfi
 	# picorv32_waitirq_insn(zero)

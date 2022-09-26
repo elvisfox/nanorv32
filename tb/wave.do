@@ -17,6 +17,11 @@ add wave -noupdate -expand -group {IO bus} /testbench/top/mem_addr
 add wave -noupdate -expand -group {IO bus} /testbench/top/mem_wdata
 add wave -noupdate -expand -group {IO bus} /testbench/top/mem_wstrb
 add wave -noupdate -expand -group {IO bus} /testbench/top/mem_rdata
+add wave -noupdate -expand -group {Memory Interface} /testbench/top/uut/mem_la_read
+add wave -noupdate -expand -group {Memory Interface} /testbench/top/uut/mem_la_write
+add wave -noupdate -expand -group {Memory Interface} /testbench/top/uut/mem_la_addr
+add wave -noupdate -expand -group {Memory Interface} /testbench/top/uut/mem_la_wdata
+add wave -noupdate -expand -group {Memory Interface} /testbench/top/uut/mem_la_wstrb
 add wave -noupdate -expand -group {Memory Interface} /testbench/top/uut/mem_do_prefetch
 add wave -noupdate -expand -group {Memory Interface} /testbench/top/uut/mem_do_rinst
 add wave -noupdate -expand -group {Memory Interface} /testbench/top/uut/mem_do_rdata
@@ -54,7 +59,7 @@ add wave -noupdate -expand -group Instruction /testbench/top/uut/latched_branch
 add wave -noupdate -expand -group Instruction /testbench/top/uut/reg_out
 add wave -noupdate -expand -group Instruction /testbench/top/uut/next_pc
 TreeUpdate [SetDefaultTree]
-WaveRestoreCursors {{Cursor 1} {1378140 ps} 0}
+WaveRestoreCursors {{Cursor 1} {83325500 ps} 0}
 quietly wave cursor active 1
 configure wave -namecolwidth 238
 configure wave -valuecolwidth 100
@@ -70,4 +75,4 @@ configure wave -griddelta 40
 configure wave -timeline 0
 configure wave -timelineunits us
 update
-WaveRestoreZoom {1367130 ps} {1444590 ps}
+WaveRestoreZoom {82949340 ps} {84041570 ps}
