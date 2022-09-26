@@ -196,6 +196,10 @@ module nanorv32_wrapper #(
 				$finish;
 			end
 		end
+
+		else begin
+			mem_rdata <= 32'hxxxx_xxxx;
+		end
 	end
 
 endmodule

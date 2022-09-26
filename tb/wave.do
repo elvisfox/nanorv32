@@ -49,8 +49,12 @@ add wave -noupdate -expand -group Instruction /testbench/top/uut/dbg_rs1val
 add wave -noupdate -expand -group Instruction /testbench/top/uut/dbg_rs2val
 add wave -noupdate -expand -group Instruction /testbench/top/uut/dbg_rs1val_valid
 add wave -noupdate -expand -group Instruction /testbench/top/uut/dbg_rs2val_valid
+add wave -noupdate -expand -group Instruction /testbench/top/uut/latched_store
+add wave -noupdate -expand -group Instruction /testbench/top/uut/latched_branch
+add wave -noupdate -expand -group Instruction /testbench/top/uut/reg_out
+add wave -noupdate -expand -group Instruction /testbench/top/uut/next_pc
 TreeUpdate [SetDefaultTree]
-WaveRestoreCursors {{Cursor 1} {980260 ps} 0}
+WaveRestoreCursors {{Cursor 1} {1378140 ps} 0}
 quietly wave cursor active 1
 configure wave -namecolwidth 238
 configure wave -valuecolwidth 100
@@ -66,4 +70,4 @@ configure wave -griddelta 40
 configure wave -timeline 0
 configure wave -timelineunits us
 update
-WaveRestoreZoom {933730 ps} {1083230 ps}
+WaveRestoreZoom {1367130 ps} {1444590 ps}

@@ -460,7 +460,7 @@ module nanorv32 #(
 		if (!resetn) begin
 			mem_la_firstword_reg <= 0;
 			last_mem_valid <= 0;
-		end else begin
+		end else begin 
 			if (!last_mem_valid)
 				mem_la_firstword_reg <= mem_la_firstword;
 			last_mem_valid <= mem_valid && !mem_ready;
@@ -653,12 +653,17 @@ module nanorv32 #(
 				MEM_STATE_IDLE: begin
 					if (CATCH_MISALIGN && (mem_do_rdata || mem_do_wdata) && mem_wordsize == 0 && reg_op1[1:0] != 0) begin
 						`debug($display("MISALIGNED WORD: 0x%08x", reg_op1);)
-						mem_err_misaligned <= 1'b1;
+						mem_err_misaligned <= !mem_err_misaligned;
 					end
 
 					else if (CATCH_MISALIGN && (mem_do_rdata || mem_do_wdata) && mem_wordsize == 1 && reg_op1[0] != 0) begin
 						`debug($display("MISALIGNED HALFWORD: 0x%08x", reg_op1);)
-						mem_err_misaligned <= 1'b1;
+						mem_err_misaligned <= !mem_err_misaligned;
+					end
+
+					else if (CATCH_MISALIGN && (mem_do_prefetch || mem_do_rinst) && (COMPRESSED_ISA ? next_pc[0] : |next_pc[1:0])) begin
+						`debug($display("MISALIGNED INSTRUCTION: 0x%08x", next_pc);)
+						mem_err_misaligned <= mem_do_rinst && !mem_err_misaligned;
 					end
 
 					else begin
@@ -1390,7 +1395,7 @@ module nanorv32 #(
 	reg [regindex_bits-1:0] latched_rd;
 
 	reg [31:0] current_pc;
-	assign next_pc = latched_store && latched_branch ? reg_out & ~1 : reg_next_pc;
+	assign next_pc = latched_store && latched_branch ? reg_out /*& ~1*/ : reg_next_pc;
 
 	reg [3:0] pcpi_timeout_counter;
 	reg pcpi_timeout;
@@ -1587,19 +1592,24 @@ module nanorv32 #(
 		begin
 			if(MACHINE_ISA) begin
 				if(!mtrap) begin
-					mtrap <= 1'b1;
-					mtrap_prev <= mtrap;
-					mcause_irq <= 1'b0;
-					mcause_code <= code;
-					// reg_next_pc <= PROGADDR_IRQ;
-					mepc <= reg_pc;
-					mstatus_mie <= 1'b0;
-					mstatus_mpie <= mstatus_mie;
-					cpu_state <= cpu_state_fetch;
-					latched_branch <= 1'b1;
-					latched_store <= 1'b1;
-					reg_out <= PROGADDR_IRQ;
-					mem_do_prefetch <= 1'b0;
+					// this task is called from the main state machine
+					// if mem_do_prefetch is 1, we need to complete the instruction fetch first before changing state
+					// this is done outside of this task by setting mem_do_rinst <= mem_do_prefetch
+					if(!mem_do_prefetch || mem_done) begin
+						mtrap <= 1'b1;
+						mtrap_prev <= mtrap;
+						mcause_irq <= 1'b0;
+						mcause_code <= code;
+						// reg_next_pc <= PROGADDR_IRQ;
+						mepc <= reg_pc;
+						mstatus_mie <= 1'b0;
+						mstatus_mpie <= mstatus_mie;
+						cpu_state <= cpu_state_fetch;
+						latched_branch <= 1'b1;
+						latched_store <= 1'b1;
+						reg_out <= PROGADDR_IRQ;
+					end
+					// mem_do_prefetch <= 1'b0;
 				end
 				else
 					cpu_state <= cpu_state_trap;
@@ -1722,7 +1732,7 @@ module nanorv32 #(
 				(* parallel_case *)
 				case (1'b1)
 					latched_branch: begin
-						current_pc = latched_store ? (latched_stalu ? alu_out_q : reg_out) & ~1 : reg_next_pc;
+						current_pc = latched_store ? (latched_stalu ? alu_out_q : reg_out) /*& ~1*/ : reg_next_pc;
 						`debug($display("ST_RD:  %2d 0x%08x, BRANCH 0x%08x", latched_rd, reg_pc + (latched_compr ? 2 : 4), current_pc);)
 					end
 					latched_store && !latched_branch: begin
@@ -1762,7 +1772,12 @@ module nanorv32 #(
 				latched_rd <= decoded_rd;
 				latched_compr <= compressed_instr;
 
-				if (MACHINE_ISA && (decoder_trigger && mstatus_mie && /*!irq_delay &&*/ |(mie & mip))) begin
+				if((mem_do_prefetch || mem_do_rinst) && mem_err_misaligned) begin
+					do_trap(4'd0);		// instruction address misaligned
+					decoder_trigger <= 1'b0;
+				end
+
+				else if (MACHINE_ISA && (decoder_trigger && mstatus_mie && /*!irq_delay &&*/ |(mie & mip))) begin
 					mtrap_prev <= mtrap;
 					reg_pc <= PROGADDR_IRQ;
 					reg_next_pc <= PROGADDR_IRQ;
@@ -1786,8 +1801,9 @@ module nanorv32 #(
 					// 	latched_rd <= irqregs_offset | irq_state[0];
 					// else
 					// 	latched_rd <= irq_state[0] ? 4 : 3;
-				end else
-				if (MACHINE_ISA && (decoder_trigger || do_waitirq) && instr_wfi) begin
+				end
+
+				else if (MACHINE_ISA && (decoder_trigger || do_waitirq) && instr_wfi) begin
 					if (mie & mip) begin
 						// latched_store <= 1;
 						// reg_out <= irq_pending;
@@ -1795,8 +1811,9 @@ module nanorv32 #(
 						mem_do_rinst <= 1;
 					end else
 						do_waitirq <= 1;
-				end else
-				if (decoder_trigger) begin
+				end
+
+				else if (decoder_trigger) begin
 					`debug($display("-- %-0t", $time);)
 					// irq_delay <= irq_active;
 					reg_next_pc <= current_pc + (compressed_instr ? 2 : 4);
@@ -1818,8 +1835,7 @@ module nanorv32 #(
 				end
 			end
 
-			cpu_state_ld_rs1: begin
-				reg_op1 <= 'bx;
+			cpu1 <= 'bx;
 				reg_op2 <= 'bx;
 
 				(* parallel_case *)
@@ -1847,7 +1863,9 @@ module nanorv32 #(
 								if (CATCH_ILLINSN && (pcpi_timeout || instr_ecall_ebreak)) begin
 									pcpi_valid <= 0;
 									`debug($display("EBREAK OR UNSUPPORTED INSN AT 0x%08x", reg_pc);)
-									do_trap(4'd2);		// illegal instruction
+									mem_do_rinst <= mem_do_prefetch;	// complete previous prefetch first
+									decoder_trigger <= 1'b0;
+									do_trap(4'd2);						// illegal instruction
 								end
 							end else begin
 								cpu_state <= cpu_state_ld_rs2;
@@ -2320,10 +2338,10 @@ module nanorv32 #(
 		// 		do_trap(mem_do_wdata ? 4'd6 : 4'd4);		// store / load address misaligned
 		// 	end
 		// end
-		if (CATCH_MISALIGN && resetn && mem_do_rinst && (COMPRESSED_ISA ? reg_pc[0] : |reg_pc[1:0])) begin
-			`debug($display("MISALIGNED INSTRUCTION: 0x%08x", reg_pc);)
-			do_trap(4'd0);									// instruction address misaligned
-		end
+		// if (CATCH_MISALIGN && resetn && mem_do_rinst && (COMPRESSED_ISA ? reg_pc[0] : |reg_pc[1:0])) begin
+		// 	`debug($display("MISALIGNED INSTRUCTION: 0x%08x", reg_pc);)
+		// 	do_trap(4'd0);									// instruction address misaligned
+		// end
 
 		// FIXME: this has never been verified, it might not work
 		if (!CATCH_ILLINSN && decoder_trigger_q && !decoder_pseudo_trigger_q && instr_ecall_ebreak) begin
