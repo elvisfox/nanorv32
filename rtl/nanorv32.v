@@ -1689,6 +1689,7 @@ module nanorv32 #(
 		end
 
 		next_irq_pending = MACHINE_ISA ? irq_pending & LATCHED_IRQ : 'bx;
+		eoi <= 0;
 
 		if (MACHINE_ISA && ENABLE_IRQ_TIMER && timer) begin
 			timer <= timer - 1;
@@ -1737,7 +1738,7 @@ module nanorv32 #(
 			irq_mask <= 0;
 			next_irq_pending = 0;
 			// irq_state <= 0;
-			eoi <= 0;
+			// eoi <= 0;
 			timer <= 0;
 			if (~STACKADDR) begin
 				latched_store <= 1;
