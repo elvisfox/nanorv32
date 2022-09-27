@@ -90,10 +90,10 @@ module nanorv32 #(
 	parameter [ 0:0] MACHINE_ISA = 0,
 	parameter [ 0:0] ENABLE_CSR_MSCRATCH = 1,
 	parameter [ 0:0] ENABLE_CSR_MTVAL = 1,
-	// parameter [ 0:0] ENABLE_IRQ = 0,
-	// parameter [ 0:0] ENABLE_IRQ_NESTED = 0,
-	// parameter [ 0:0] ENABLE_IRQ_QREGS = 1,
+	parameter [ 0:0] ENABLE_CSR_CUSTOM_TRAP = 1,
+	parameter [ 0:0] ENABLE_IRQ_EXTERNAL = 1,
 	parameter [ 0:0] ENABLE_IRQ_TIMER = 1,
+	parameter [ 0:0] ENABLE_IRQ_SOFTWARE = 1,
 	parameter [ 0:0] ENABLE_TRACE = 0,
 	parameter [ 0:0] REGS_INIT_ZERO = 0,
 	parameter [31:0] MASKED_IRQ = 32'h 0000_0000,
@@ -173,10 +173,6 @@ module nanorv32 #(
 	output reg        trace_valid,
 	output reg [35:0] trace_data
 );
-	// localparam integer irq_timer = 0;
-	// localparam integer irq_ebreak = 1;
-	// localparam integer irq_buserror = 2;
-
 	// localparam integer irqregs_offset = ENABLE_REGS_16_31 ? 32 : 16;
 	localparam integer regfile_size = ENABLE_REGS_16_31 ? 32 : 16;
 	localparam integer regindex_bits = $clog2(regfile_size);
@@ -769,8 +765,6 @@ module nanorv32 #(
 	reg instr_addi, instr_slti, instr_sltiu, instr_xori, instr_ori, instr_andi, instr_slli, instr_srli, instr_srai;
 	reg instr_add, instr_sub, instr_sll, instr_slt, instr_sltu, instr_xor, instr_srl, instr_sra, instr_or, instr_and;
 	reg instr_rdcycle, instr_rdcycleh, instr_rdinstr, instr_rdinstrh, instr_ecall_ebreak;
-	// reg instr_getq, instr_setq, instr_retirq, instr_maskirq, instr_waitirq;
-	// reg instr_enairq, instr_disirq, instr_trigirq;
 	reg instr_timer;
 	reg instr_mret, instr_wfi;
 	reg instr_csrrw, instr_csrrs, instr_csrrc;
@@ -808,8 +802,6 @@ module nanorv32 #(
 			instr_addi, instr_slti, instr_sltiu, instr_xori, instr_ori, instr_andi, instr_slli, instr_srli, instr_srai,
 			instr_add, instr_sub, instr_sll, instr_slt, instr_sltu, instr_xor, instr_srl, instr_sra, instr_or, instr_and,
 			instr_rdcycle, instr_rdcycleh, instr_rdinstr, instr_rdinstrh, instr_timer,
-			// instr_getq, instr_setq, instr_retirq, instr_maskirq, instr_waitirq,
-			// instr_enairq, instr_disirq, instr_trigirq
 			instr_mret, instr_wfi, instr_csrrw, instr_csrrs, instr_csrrc, instr_csrrwi, instr_csrrsi, instr_csrrci};
 
 	wire is_rdcycle_rdcycleh_rdinstr_rdinstrh;
@@ -876,15 +868,7 @@ module nanorv32 #(
 		if (instr_rdinstr)  new_ascii_instr = "rdinstr";
 		if (instr_rdinstrh) new_ascii_instr = "rdinstrh";
 
-		// if (instr_getq)     new_ascii_instr = "getq";
-		// if (instr_setq)     new_ascii_instr = "setq";
-		// if (instr_retirq)   new_ascii_instr = "retirq";
-		// if (instr_maskirq)  new_ascii_instr = "maskirq";
-		// if (instr_waitirq)  new_ascii_instr = "waitirq";
 		if (instr_timer)    new_ascii_instr = "timer";
-		// if (instr_enairq)   new_ascii_instr = "enairq";
-		// if (instr_disirq)   new_ascii_instr = "disirq";
-		// if (instr_trigirq)  new_ascii_instr = "trigirq";
 
 		if (instr_mret)		new_ascii_instr = "mret";
 		if (instr_wfi)		new_ascii_instr = "wfi";
@@ -1007,8 +991,6 @@ module nanorv32 #(
 			instr_auipc   <= mem_rdata_latched[6:0] == 7'b0010111;
 			instr_jal     <= mem_rdata_latched[6:0] == 7'b1101111;
 			instr_jalr    <= mem_rdata_latched[6:0] == 7'b1100111 && mem_rdata_latched[14:12] == 3'b000;
-			// instr_retirq  <= mem_rdata_latched[6:0] == 7'b0001011 && mem_rdata_latched[31:25] == 7'b0000010 && ENABLE_IRQ;
-			// instr_waitirq <= mem_rdata_latched[6:0] == 7'b0001011 && mem_rdata_latched[31:25] == 7'b0000100 && ENABLE_IRQ;
 
 			instr_mret		<= mem_rdata_latched[6:0] == 7'b1110011 && mem_rdata_latched[14:12] == 3'b000 &&
 							   mem_rdata_latched[31:20] == 12'b001100000010 && mem_rdata_latched[19:15] == 5'b00000 &&
@@ -1032,19 +1014,6 @@ module nanorv32 #(
 			// csrrXi
 			is_csrrwi_csrrsi_csrrci <= mem_rdata_latched[6:0] == 7'b1110011 && mem_rdata_latched[14] == 1'b1 &&
 									   mem_rdata_latched[13:12] != 2'b00 && MACHINE_ISA;
-
-			// mscratch access
-			// if(mem_rdata_latched[6:0] == 7'b1110011 && mem_rdata_latched[13:12] != 2'b00 && MACHINE_ISA && ENABLE_MSCRATCH)
-			// 	decoded_rs1 <= {1'b1, {(regindex_bits-1){1'b0}}};
-
-			// if (mem_rdata_latched[6:0] == 7'b0001011 && mem_rdata_latched[31:25] == 7'b0000000 && ENABLE_IRQ && ENABLE_IRQ_QREGS)
-			// 	decoded_rs1[regindex_bits-1] <= 1; // instr_getq
-
-			// if (mem_rdata_latched[6:0] == 7'b0001011 && mem_rdata_latched[31:25] == 7'b0000010 && ENABLE_IRQ) begin
-			// 	decoded_rs1 <= ENABLE_IRQ_QREGS ? irqregs_offset : 3; // instr_retirq
-			// 	if(ENABLE_IRQ_NESTED)
-			// 		decoded_rs2 <= ENABLE_IRQ_QREGS ? irqregs_offset + 1 : 4; // see irq_state regs
-			// end
 
 			compressed_instr <= 0;
 			if (COMPRESSED_ISA && mem_rdata_latched[1:0] != 2'b11) begin
@@ -1243,13 +1212,7 @@ module nanorv32 #(
 			instr_ecall_ebreak <= ((mem_rdata_q[6:0] == 7'b1110011 && !mem_rdata_q[31:21] && !mem_rdata_q[19:7]) ||
 					(COMPRESSED_ISA && mem_rdata_q[15:0] == 16'h9002));
 
-			// instr_getq    <= mem_rdata_q[6:0] == 7'b0001011 && mem_rdata_q[31:25] == 7'b0000000 && ENABLE_IRQ && ENABLE_IRQ_QREGS;
-			// instr_setq    <= mem_rdata_q[6:0] == 7'b0001011 && mem_rdata_q[31:25] == 7'b0000001 && ENABLE_IRQ && ENABLE_IRQ_QREGS;
-			// instr_maskirq <= mem_rdata_q[6:0] == 7'b0001011 && mem_rdata_q[31:25] == 7'b0000011 && ENABLE_IRQ;
 			instr_timer   <= mem_rdata_q[6:0] == 7'b0001011 && mem_rdata_q[31:25] == 7'b0000101 && MACHINE_ISA && ENABLE_IRQ_TIMER;
-			// instr_disirq  <= mem_rdata_q[6:0] == 7'b0001011 && mem_rdata_q[31:25] == 7'b0000110 && ENABLE_IRQ && ENABLE_IRQ_NESTED;
-			// instr_enairq  <= mem_rdata_q[6:0] == 7'b0001011 && mem_rdata_q[31:25] == 7'b0000111 && ENABLE_IRQ && ENABLE_IRQ_NESTED;
-			// instr_trigirq <= mem_rdata_q[6:0] == 7'b0001011 && mem_rdata_q[31:25] == 7'b0001000 && ENABLE_IRQ && ENABLE_IRQ_NESTED;
 
 			instr_csrrw		<= mem_rdata_q[6:0] == 7'b1110011 && mem_rdata_q[14:12] == 3'b001 && MACHINE_ISA;
 			instr_csrrs		<= mem_rdata_q[6:0] == 7'b1110011 && mem_rdata_q[14:12] == 3'b010 && MACHINE_ISA;
@@ -1387,7 +1350,6 @@ module nanorv32 #(
 	localparam cpu_state_ldmem  = 8'b00000001;
 
 	reg [7:0] cpu_state;
-	// reg [1:0] irq_state;
 
 	`FORMAL_KEEP reg [127:0] dbg_ascii_state;
 
@@ -1402,10 +1364,6 @@ module nanorv32 #(
 		if (cpu_state == cpu_state_stmem)  dbg_ascii_state = "stmem";
 		if (cpu_state == cpu_state_ldmem)  dbg_ascii_state = "ldmem";
 	end
-
-	reg set_mem_do_rinst;
-	// reg set_mem_do_rdata;
-	// reg set_mem_do_wdata;
 
 	reg latched_store;
 	reg latched_stalu;
@@ -1533,14 +1491,6 @@ module nanorv32 #(
 					cpuregs_wrdata = latched_stalu ? alu_out_q : reg_out;
 					cpuregs_write = 1;
 				end
-				// ENABLE_IRQ && irq_state[0]: begin
-				// 	cpuregs_wrdata = reg_next_pc | latched_compr;
-				// 	cpuregs_write = 1;
-				// end
-				// ENABLE_IRQ && irq_state[1]: begin
-				// 	cpuregs_wrdata = irq_pending & ~irq_mask;
-				// 	cpuregs_write = 1;
-				// end
 			endcase
 		end
 	end
@@ -1618,7 +1568,7 @@ module nanorv32 #(
 	task do_trap(input [3:0] code, input [31:0] mtval_value);
 		begin
 			if(MACHINE_ISA) begin
-				if(!mtrap) begin
+				if(!mtrap || !ENABLE_CSR_CUSTOM_TRAP) begin
 					// this task is called from the main state machine
 					// if mem_do_prefetch is 1, we need to complete the instruction fetch first before changing state
 					// this is done outside of this task by setting mem_do_rinst <= mem_do_prefetch
@@ -1628,7 +1578,6 @@ module nanorv32 #(
 						mcause_irq <= 1'b0;
 						mcause_code <= code;
 						mtval <= mtval_value;
-						// reg_next_pc <= PROGADDR_IRQ;
 						mepc <= reg_pc;
 						mstatus_mie <= 1'b0;
 						mstatus_mpie <= mstatus_mie;
@@ -1638,7 +1587,6 @@ module nanorv32 #(
 						latched_store <= 1'b1;
 						reg_out <= PROGADDR_IRQ;
 					end
-					// mem_do_prefetch <= 1'b0;
 				end
 				else
 					cpu_state <= cpu_state_trap;
@@ -1652,9 +1600,6 @@ module nanorv32 #(
 		trap <= 0;
 		reg_sh <= 'bx;
 		reg_out <= 'bx;
-		set_mem_do_rinst = 0;
-		// set_mem_do_rdata = 0;
-		// set_mem_do_wdata = 0;
 
 		alu_out_0_q <= alu_out_0;
 		alu_out_q <= alu_out;
@@ -1704,8 +1649,8 @@ module nanorv32 #(
 		trace_valid <= 0;
 
 		if (!resetn || mem_done) begin
-			// mem_do_prefetch <= 0;
-			// mem_do_rinst <= 0;
+			mem_do_prefetch <= 0;
+			mem_do_rinst <= 0;
 			mem_do_rdata <= 0;
 			mem_do_wdata <= 0;
 		end
@@ -1733,12 +1678,9 @@ module nanorv32 #(
 			mip <= 0;
 			mtrap_prev <= 1'b0;
 			mtrap <= 1'b0;
-			// mip <= 0;
 			// irq_delay <= 0;
 			irq_mask <= 0;
 			next_irq_pending = 0;
-			// irq_state <= 0;
-			// eoi <= 0;
 			timer <= 0;
 			if (~STACKADDR) begin
 				latched_store <= 1;
@@ -1754,7 +1696,7 @@ module nanorv32 #(
 			end
 
 			cpu_state_fetch: begin
-				mem_do_rinst <= !decoder_trigger && !do_waitirq;
+				mem_do_rinst <= !decoder_trigger && !do_waitirq && !mem_done;
 				mem_wordsize <= 0;
 
 				latched_store <= 0;
@@ -1788,17 +1730,6 @@ module nanorv32 #(
 					latched_store && !latched_branch: begin
 						`debug($display("ST_RD:  %2d 0x%08x", latched_rd, latched_stalu ? alu_out_q : reg_out);)
 					end
-					// FIXME
-					// ENABLE_IRQ && irq_state[0]: begin
-					// 	current_pc = PROGADDR_IRQ;
-					// 	mstatus_mie <= 1'b0;
-					// 	mstatus_mpie <= mstatus_mie;
-					// 	mem_do_rinst <= 1;
-					// end
-					// ENABLE_IRQ && irq_state[1]: begin
-					// 	eoi <= eoi | (irq_pending & ~irq_mask);
-					// 	next_irq_pending = next_irq_pending & irq_mask;
-					// end
 				endcase
 
 				if (ENABLE_TRACE && latched_trace) begin
@@ -1834,22 +1765,13 @@ module nanorv32 #(
 					mstatus_mie <= 1'b0;
 					mstatus_mpie <= mstatus_mie;
 
- 					// irq_state <=
-					// 	irq_state == 2'b00 ? 2'b01 :
-					// 	irq_state == 2'b01 ? 2'b10 : 2'b00;
 					latched_compr <= latched_compr;
-					// if (ENABLE_IRQ_QREGS)
-					// 	latched_rd <= irqregs_offset | irq_state[0];
-					// else
-					// 	latched_rd <= irq_state[0] ? 4 : 3;
 				end
 
 				else if (MACHINE_ISA && (decoder_trigger || do_waitirq) && instr_wfi) begin
 					if (mie & mip) begin
-						// latched_store <= 1;
-						// reg_out <= irq_pending;
 						reg_next_pc <= current_pc + (compressed_instr ? 2 : 4);
-						mem_do_rinst <= 1;
+						mem_do_rinst <= !mem_done;
 					end else
 						do_waitirq <= 1;
 				end
@@ -1865,12 +1787,12 @@ module nanorv32 #(
 						if (!ENABLE_COUNTERS64) count_instr[63:32] <= 0;
 					end
 					if (instr_jal) begin
-						mem_do_rinst <= 1;
+						mem_do_rinst <= !mem_done;
 						reg_next_pc <= current_pc + decoded_imm_j;
 						latched_branch <= 1;
 					end else begin
 						mem_do_rinst <= 0;
-						mem_do_prefetch <= !instr_jalr && !instr_mret;
+						mem_do_prefetch <= !instr_jalr && !instr_mret;	// && !mem_done;
 						cpu_state <= cpu_state_ld_rs1;
 					end
 				end
@@ -1896,7 +1818,7 @@ module nanorv32 #(
 								dbg_rs2val <= cpuregs_rs2;
 								dbg_rs2val_valid <= 1;
 								if (pcpi_int_ready) begin
-									mem_do_rinst <= 1;
+									mem_do_rinst <= !mem_done;
 									pcpi_valid <= 0;
 									reg_out <= pcpi_int_rd;
 									latched_store <= pcpi_int_wr;
@@ -1905,9 +1827,9 @@ module nanorv32 #(
 								if (CATCH_ILLINSN && (pcpi_timeout || instr_ecall_ebreak)) begin
 									pcpi_valid <= 0;
 									`debug($display("EBREAK OR UNSUPPORTED INSN AT 0x%08x", reg_pc);)
-									mem_do_rinst <= mem_do_prefetch;	// complete previous prefetch first
+									mem_do_rinst <= mem_do_prefetch && !mem_done;	// complete previous prefetch first
 									decoder_trigger <= 1'b0;
-									do_trap(4'd2, reg_pc);						// illegal instruction
+									do_trap(4'd2, reg_pc);							// illegal instruction
 								end
 							end else begin
 								cpu_state <= cpu_state_ld_rs2;
@@ -1938,7 +1860,7 @@ module nanorv32 #(
 						if (TWO_CYCLE_ALU)
 							alu_wait <= 1;
 						else
-							mem_do_rinst <= mem_do_prefetch;
+							mem_do_rinst <= mem_do_prefetch && !mem_done;
 						cpu_state <= cpu_state_exec;
 					end
 					MACHINE_ISA && instr_mret: begin
@@ -2041,34 +1963,6 @@ module nanorv32 #(
 						// back to fetch state
 						cpu_state <= cpu_state_fetch;
 					end
-					// ENABLE_IRQ && instr_maskirq: begin
-					// 	latched_store <= 1;
-					// 	reg_out <= irq_mask;
-					// 	`debug($display("LD_RS1: %2d 0x%08x", decoded_rs1, cpuregs_rs1);)
-					// 	irq_mask <= cpuregs_rs1 | MASKED_IRQ;
-					// 	dbg_rs1val <= cpuregs_rs1;
-					// 	dbg_rs1val_valid <= 1;
-					// 	cpu_state <= cpu_state_fetch;
-					// end
-					// ENABLE_IRQ && ENABLE_IRQ_NESTED && instr_trigirq: begin
-					// 	// latched_store <= 1;
-					// 	// reg_out <= irq_mask;
-					// 	`debug($display("LD_RS1: %2d 0x%08x", decoded_rs1, cpuregs_rs1);)
-					// 	// NOTE: in order to soft-trigger an IRQ it should either be unmasked
-					// 	//       or corresponding LATCHED_IRQ bit should be set
-					// 	next_irq_pending = next_irq_pending | cpuregs_rs1;
-					// 	dbg_rs1val <= cpuregs_rs1;
-					// 	dbg_rs1val_valid <= 1;
-					// 	cpu_state <= cpu_state_fetch;
-					// end
-					// ENABLE_IRQ && ENABLE_IRQ_NESTED && instr_enairq: begin
-					// 	mstatus_mie <= 1'b1;
-					// 	cpu_state <= cpu_state_fetch;
-					// end
-					// ENABLE_IRQ && ENABLE_IRQ_NESTED && instr_disirq: begin
-					// 	mstatus_mie <= 1'b0;
-					// 	cpu_state <= cpu_state_fetch;
-					// end
 					MACHINE_ISA && ENABLE_IRQ_TIMER && instr_timer: begin
 						latched_store <= 1;
 						reg_out <= timer;
@@ -2084,7 +1978,7 @@ module nanorv32 #(
 						dbg_rs1val <= cpuregs_rs1;
 						dbg_rs1val_valid <= 1;
 						cpu_state <= cpu_state_ldmem;
-						mem_do_rinst <= 1;
+						mem_do_rinst <= !mem_done;
 					end
 					is_slli_srli_srai && !BARREL_SHIFTER: begin
 						`debug($display("LD_RS1: %2d 0x%08x", decoded_rs1, cpuregs_rs1);)
@@ -2103,7 +1997,7 @@ module nanorv32 #(
 						if (TWO_CYCLE_ALU)
 							alu_wait <= 1;
 						else
-							mem_do_rinst <= mem_do_prefetch;
+							mem_do_rinst <= mem_do_prefetch && !mem_done;
 						cpu_state <= cpu_state_exec;
 					end
 					default: begin
@@ -2121,7 +2015,7 @@ module nanorv32 #(
 							case (1'b1)
 								is_sb_sh_sw: begin
 									cpu_state <= cpu_state_stmem;
-									mem_do_rinst <= 1;
+									mem_do_rinst <= !mem_done;
 								end
 								is_sll_srl_sra && !BARREL_SHIFTER: begin
 									cpu_state <= cpu_state_shift;
@@ -2131,7 +2025,7 @@ module nanorv32 #(
 										alu_wait_2 <= TWO_CYCLE_ALU && (TWO_CYCLE_COMPARE && is_beq_bne_blt_bge_bltu_bgeu);
 										alu_wait <= 1;
 									end else
-										mem_do_rinst <= mem_do_prefetch;
+										mem_do_rinst <= mem_do_prefetch && !mem_done;
 									cpu_state <= cpu_state_exec;
 								end
 							endcase
@@ -2153,7 +2047,7 @@ module nanorv32 #(
 					WITH_PCPI && instr_trap: begin
 						pcpi_valid <= 1;
 						if (pcpi_int_ready) begin
-							mem_do_rinst <= 1;
+							mem_do_rinst <= !mem_done;
 							pcpi_valid <= 0;
 							reg_out <= pcpi_int_rd;
 							latched_store <= pcpi_int_wr;
@@ -2167,25 +2061,17 @@ module nanorv32 #(
 					end
 					is_sb_sh_sw: begin
 						cpu_state <= cpu_state_stmem;
-						mem_do_rinst <= 1;
+						mem_do_rinst <= !mem_done;
 					end
 					is_sll_srl_sra && !BARREL_SHIFTER: begin
 						cpu_state <= cpu_state_shift;
 					end
-					// ENABLE_IRQ && ENABLE_IRQ_NESTED && !ENABLE_REGS_DUALPORT && instr_retirq: begin
-					// 	eoi <= eoi & ~cpuregs_rs2;
-					// 	mstatus_mie <= 1'b1;
-					// 	reg_out <= CATCH_MISALIGN ? (reg_op1 & 32'h fffffffe) : reg_op1;
-					// 	latched_branch <= 1;
-					// 	latched_store <= 1;
-					// 	cpu_state <= cpu_state_fetch;
-					// end
 					default: begin
 						if (TWO_CYCLE_ALU || (TWO_CYCLE_COMPARE && is_beq_bne_blt_bge_bltu_bgeu)) begin
 							alu_wait_2 <= TWO_CYCLE_ALU && (TWO_CYCLE_COMPARE && is_beq_bne_blt_bge_bltu_bgeu);
 							alu_wait <= 1;
 						end else
-							mem_do_rinst <= mem_do_prefetch;
+							mem_do_rinst <= mem_do_prefetch && !mem_done;
 						cpu_state <= cpu_state_exec;
 					end
 				endcase
@@ -2194,7 +2080,7 @@ module nanorv32 #(
 			cpu_state_exec: begin
 				reg_out <= reg_pc + decoded_imm;
 				if ((TWO_CYCLE_ALU || TWO_CYCLE_COMPARE) && (alu_wait || alu_wait_2)) begin
-					mem_do_rinst <= mem_do_prefetch && !alu_wait_2;
+					mem_do_rinst <= mem_do_prefetch && !alu_wait_2 && !mem_done;
 					alu_wait <= alu_wait_2;
 				end else
 				if (is_beq_bne_blt_bge_bltu_bgeu) begin
@@ -2205,7 +2091,7 @@ module nanorv32 #(
 						cpu_state <= cpu_state_fetch;
 					if (TWO_CYCLE_COMPARE ? alu_out_0_q : alu_out_0) begin
 						decoder_trigger <= 0;
-						set_mem_do_rinst = 1;
+						mem_do_rinst <= 1'b1;
 					end
 				end else begin
 					latched_branch <= instr_jalr;
@@ -2219,7 +2105,7 @@ module nanorv32 #(
 				latched_store <= 1;
 				if (reg_sh == 0) begin
 					reg_out <= reg_op1;
-					mem_do_rinst <= mem_do_prefetch;
+					mem_do_rinst <= mem_do_prefetch && !mem_done;
 					cpu_state <= cpu_state_fetch;
 				end else if (TWO_STAGE_SHIFT && reg_sh >= 4) begin
 					(* parallel_case, full_case *)
@@ -2251,7 +2137,6 @@ module nanorv32 #(
 						if(CATCH_MISALIGN && 
 						   ((instr_sw && mem_op_addr[1:0] != 0) || (instr_sh && mem_op_addr[0] != 0)) ) begin
 							do_trap(4'd6, mem_op_addr);		// store address misaligned
-							// TODO: $display
 							case({instr_sw, instr_sh})
 								2'b10:		`debug($display("MISALIGNED SW: 0x%08x", mem_op_addr);)
 								2'b01:		`debug($display("MISALIGNED SH: 0x%08x", mem_op_addr);)
@@ -2295,7 +2180,6 @@ module nanorv32 #(
 						if(CATCH_MISALIGN && 
 						   ((instr_lw && mem_op_addr[1:0] != 0) || (instr_lh && mem_op_addr[0] != 0)) ) begin
 							do_trap(4'd4, mem_op_addr);		// load address misaligned
-							// TODO: $display
 							case({instr_lw, instr_lh})
 								2'b10:		`debug($display("MISALIGNED LW: 0x%08x", mem_op_addr);)
 								2'b01:		`debug($display("MISALIGNED LH: 0x%08x", mem_op_addr);)
@@ -2343,7 +2227,10 @@ module nanorv32 #(
 		next_irq_pending = next_irq_pending | irq;
 
 		// External interrupt pending bit
-		mip[M_IRQ_EXTERNAL] <= |(irq_pending & irq_mask);
+		if(MACHINE_ISA && ENABLE_IRQ_EXTERNAL)
+			mip[M_IRQ_EXTERNAL] <= |(irq_pending & irq_mask);
+		else
+			mip[M_IRQ_EXTERNAL] <= 1'b0;
 		
 		// Timer interrupt pending bit
 		if(MACHINE_ISA && ENABLE_IRQ_TIMER) begin
@@ -2353,42 +2240,26 @@ module nanorv32 #(
 		else
 			mip[M_IRQ_TIMER] <= 1'b0;
 
-		// Misalign detection has been moved to memory interface
-		// if (CATCH_MISALIGN && resetn && (mem_do_rdata || mem_do_wdata)) begin
-		// 	if (mem_wordsize == 0 && reg_op1[1:0] != 0) begin
-		// 		`debug($display("MISALIGNED WORD: 0x%08x", reg_op1);)
-		// 		do_trap(mem_do_wdata ? 4'd6 : 4'd4);		// store / load address misaligned
-		// 	end
-		// 	if (mem_wordsize == 1 && reg_op1[0] != 0) begin
-		// 		`debug($display("MISALIGNED HALFWORD: 0x%08x", reg_op1);)
-		// 		do_trap(mem_do_wdata ? 4'd6 : 4'd4);		// store / load address misaligned
-		// 	end
-		// end
-		// if (CATCH_MISALIGN && resetn && mem_do_rinst && (COMPRESSED_ISA ? reg_pc[0] : |reg_pc[1:0])) begin
-		// 	`debug($display("MISALIGNED INSTRUCTION: 0x%08x", reg_pc);)
-		// 	do_trap(4'd0);									// instruction address misaligned
-		// end
+		// Software interrupt pending bit
+		if(!MACHINE_ISA || !ENABLE_IRQ_SOFTWARE)
+			mip[M_IRQ_SOFTWARE] <= 1'b0;
 
 		// FIXME: this has never been verified, it might not work
 		if (!CATCH_ILLINSN && decoder_trigger_q && !decoder_pseudo_trigger_q && instr_ecall_ebreak) begin
 			cpu_state <= cpu_state_trap;
 		end
 
-		if (!resetn || mem_done) begin
-			mem_do_prefetch <= 0;
-			mem_do_rinst <= 0;
-			// mem_do_rdata <= 0;
-			// mem_do_wdata <= 0;
+		if(MACHINE_ISA && ENABLE_IRQ_EXTERNAL)
+			irq_pending <= next_irq_pending & ~MASKED_IRQ;
+		else begin
+			irq_pending <= 0;
+			irq_mask <= 0;
 		end
 
-		if (set_mem_do_rinst)
-			mem_do_rinst <= 1;
-		// if (set_mem_do_rdata)
-		// 	mem_do_rdata <= 1;
-		// if (set_mem_do_wdata)
-		// 	mem_do_wdata <= 1;
-
-		irq_pending <= next_irq_pending & ~MASKED_IRQ;
+		if(!MACHINE_ISA || !ENABLE_CSR_CUSTOM_TRAP) begin
+			mtrap <= 1'b0;
+			mtrap_prev <= 1'b0;
+		end
 
 		if (!CATCH_MISALIGN) begin
 			if (COMPRESSED_ISA) begin
