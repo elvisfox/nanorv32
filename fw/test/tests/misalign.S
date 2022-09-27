@@ -15,6 +15,11 @@
 .global misalign_sw_3
 .global misalign_sh_1
 .global misalign_sh_3
+.global misalign_lw_1
+.global misalign_lw_2
+.global misalign_lw_3
+.global misalign_lh_1
+.global misalign_lh_3
 .global aligned_word
 
 RVTEST_RV32U
@@ -107,6 +112,77 @@ misalign_sh_3:
     addi t2, zero, 0;           \
     sh t1, 4(t0);               \
     lw t2, 0(t0);               \
+  )
+
+  ###############################
+  # MISALIGNED LW
+
+  # success
+  TEST_CASE(12, t2, 0x56785678,  \
+    addi t2, zero, 0;           \
+    lw t2, 0(t0);               \
+  )
+
+  # trap
+  TEST_CASE(13, t2, 0,          \
+    addi t2, zero, 0;           \
+misalign_lw_1:
+    lw t2, 1(t0);               \
+  )
+
+  # trap
+  TEST_CASE(14, t2, 0,          \
+    addi t2, zero, 0;           \
+misalign_lw_2:
+    lw t2, 2(t0);               \
+  )
+
+  # trap
+  TEST_CASE(15, t2, 0,          \
+    addi t2, zero, 0;           \
+misalign_lw_3:
+    lw t2, 3(t0);               \
+  )
+
+  # success
+  TEST_CASE(16, t2, 0x12345678, \
+    addi t2, zero, 0;           \
+    lw t2, 4(t0);               \
+  )
+
+  ###############################
+  # MISALIGNED LH
+
+  # success
+  TEST_CASE(17, t2, 0x5678,     \
+    addi t2, zero, 0;           \
+    lh t2, 0(t0);               \
+  )
+
+  # trap
+  TEST_CASE(18, t2, 0,          \
+    addi t2, zero, 0;           \
+misalign_lh_1:
+    lh t2, 1(t0);               \
+  )
+
+  # success
+  TEST_CASE(19, t2, 0x5678,     \
+    addi t2, zero, 0;           \
+    lh t2, 2(t0);               \
+  )
+
+  # trap
+  TEST_CASE(20, t2, 0,          \
+    addi t2, zero, 0;           \
+misalign_lh_3:
+    lh t2, 3(t0);               \
+  )
+
+  # success
+  TEST_CASE(21, t2, 0x5678,     \
+    addi t2, zero, 0;           \
+    lh t2, 4(t0);               \
   )
 
   TEST_PASSFAIL
