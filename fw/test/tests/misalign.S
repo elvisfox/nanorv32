@@ -20,6 +20,8 @@
 .global misalign_lw_3
 .global misalign_lh_1
 .global misalign_lh_3
+.global misalign_j_1
+.global misalign_j_1_dst
 .global aligned_word
 
 RVTEST_RV32U
@@ -183,6 +185,29 @@ misalign_lh_3:
   TEST_CASE(21, t2, 0x5678,     \
     addi t2, zero, 0;           \
     lh t2, 4(t0);               \
+  )
+
+  ###############################
+  # MISALIGNED J
+
+  # success
+  TEST_CASE(22, t2, 0x2AA,      \
+    addi t2, zero, 0x2AA;       \
+    j j_0;                      \
+    addi t2, zero, 0x555;       \
+j_0:                            \
+  )
+
+  # trap
+  TEST_CASE(23, t2, 0x555,      \
+    addi t2, zero, 0x2AA;       \
+    lui t1, %hi(misalign_j_1_dst);      \
+    addi t1, t1, %lo(misalign_j_1_dst); \
+    addi t1, t1, 1;             \
+misalign_j_1:                   \
+    jr t1;                      \
+    addi t2, zero, 0x555;       \
+misalign_j_1_dst:               \
   )
 
   TEST_PASSFAIL

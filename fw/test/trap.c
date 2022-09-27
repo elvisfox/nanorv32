@@ -19,6 +19,8 @@ void misalign_lw_2(void);
 void misalign_lw_3(void);
 void misalign_lh_1(void);
 void misalign_lh_3(void);
+void misalign_j_1(void);
+void misalign_j_1_dst(void);
 
 bool trap(void (*mepc)(void), uint32_t mcause, void *mtval) {
 	if(mepc == &misalign_sw_1 && mcause == 6 && mtval == &aligned_word[1])
@@ -40,6 +42,8 @@ bool trap(void (*mepc)(void), uint32_t mcause, void *mtval) {
 	else if(mepc == &misalign_lh_1 && mcause == 4 && mtval == &aligned_word[1])
 		return true;
 	else if(mepc == &misalign_lh_3 && mcause == 4 && mtval == &aligned_word[3])
+		return true;
+	else if(mepc == &misalign_j_1 && mcause == 0 && mtval == &misalign_j_1_dst+1)
 		return true;
 
 	return false;

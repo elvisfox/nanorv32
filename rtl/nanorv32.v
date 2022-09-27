@@ -414,7 +414,7 @@ module nanorv32 #(
 	reg mem_do_rinst;
 	reg mem_do_rdata;
 	reg mem_do_wdata;
-	reg mem_err_misaligned;
+	// reg mem_err_misaligned;
 
 	wire mem_xfer;
 	reg mem_la_secondword, mem_la_firstword_reg, last_mem_valid;
@@ -432,7 +432,7 @@ module nanorv32 #(
 	assign mem_xfer = (mem_valid && mem_ready) || (mem_la_use_prefetched_high_word && mem_do_rinst);
 
 	wire mem_busy = |{mem_do_prefetch, mem_do_rinst, mem_do_rdata, mem_do_wdata};
-	wire mem_done = resetn && (mem_err_misaligned || 
+	wire mem_done = resetn && (/*mem_err_misaligned || */
 		((mem_xfer && |mem_state && (mem_do_rinst || mem_do_rdata || mem_do_wdata)) || (&mem_state && mem_do_rinst)) &&
 		(!mem_la_firstword || (~&mem_rdata_latched[1:0] && mem_xfer)) );
 
@@ -447,28 +447,28 @@ module nanorv32 #(
 			COMPRESSED_ISA && mem_la_secondword ? {mem_rdata_latched_noshuffle[15:0], mem_16bit_buffer} :
 			COMPRESSED_ISA && mem_la_firstword ? {16'bx, mem_rdata_latched_noshuffle[31:16]} : mem_rdata_latched_noshuffle;
 
-	reg mem_err_misaligned_comb;
+	// reg mem_err_misaligned_comb;
 
 	always @* begin
 		mem_la_read = 1'b0;
 		mem_la_write = 1'b0;
-		mem_err_misaligned_comb = 1'b0;
+		// mem_err_misaligned_comb = 1'b0;
 		if(resetn && !trap) begin
 			case(mem_state)
 				MEM_STATE_IDLE: begin
-					if(CATCH_MISALIGN && (mem_do_rdata || mem_do_wdata) && 
-					   ((mem_wordsize == 0 && reg_op1[1:0] != 0) || (mem_wordsize == 1 && reg_op1[0] != 0)) )
-						mem_err_misaligned_comb = 1'b1;
+					// if(CATCH_MISALIGN && (mem_do_rdata || mem_do_wdata) && 
+					//    ((mem_wordsize == 0 && reg_op1[1:0] != 0) || (mem_wordsize == 1 && reg_op1[0] != 0)) )
+					// 	mem_err_misaligned_comb = 1'b1;
 
-					else if (CATCH_MISALIGN && (mem_do_prefetch || mem_do_rinst) &&
-					         (COMPRESSED_ISA ? next_pc[0] : |next_pc[1:0]))
-						mem_err_misaligned_comb = 1'b1;
+					// else if (CATCH_MISALIGN && (mem_do_prefetch || mem_do_rinst) &&
+					//          (COMPRESSED_ISA ? next_pc[0] : |next_pc[1:0]))
+					// 	mem_err_misaligned_comb = 1'b1;
 
-					else begin
+					// else begin
 						mem_la_read = !mem_la_use_prefetched_high_word && 
 							(mem_do_prefetch || mem_do_rinst || mem_do_rdata);
 						mem_la_write = mem_do_wdata;
-					end
+					// end
 				end
 
 				MEM_STATE_READ: begin
@@ -656,7 +656,7 @@ module nanorv32 #(
 	end
 
 	always @(posedge clk) begin
-		mem_err_misaligned <= 1'b0;
+		// mem_err_misaligned <= 1'b0;
 
 		if (!resetn || trap) begin
 			if (!resetn)
@@ -675,21 +675,21 @@ module nanorv32 #(
 			end
 			case (mem_state)
 				MEM_STATE_IDLE: begin
-					if(mem_err_misaligned_comb) begin
-						if(mem_do_rdata || mem_do_wdata) begin
-							case(mem_wordsize)
-								0:			`debug($display("MISALIGNED WORD: 0x%08x", reg_op1);)
-								1:			`debug($display("MISALIGNED HALFWORD: 0x%08x", reg_op1);)
-								default:	`assert(0)
-							endcase
-						end
-						if(mem_do_prefetch || mem_do_rinst)
-							`debug($display("MISALIGNED INSTRUCTION: 0x%08x", next_pc);)
+					// if(mem_err_misaligned_comb) begin
+					// 	if(mem_do_rdata || mem_do_wdata) begin
+					// 		case(mem_wordsize)
+					// 			0:			`debug($display("MISALIGNED WORD: 0x%08x", reg_op1);)
+					// 			1:			`debug($display("MISALIGNED HALFWORD: 0x%08x", reg_op1);)
+					// 			default:	`assert(0)
+					// 		endcase
+					// 	end
+					// 	if(mem_do_prefetch || mem_do_rinst)
+					// 		`debug($display("MISALIGNED INSTRUCTION: 0x%08x", next_pc);)
 
-						mem_err_misaligned <= !mem_err_misaligned && (!mem_do_prefetch || mem_do_rinst);
-					end
+					// 	mem_err_misaligned <= !mem_err_misaligned && (!mem_do_prefetch || mem_do_rinst);
+					// end
 
-					else begin
+					// else begin
 						if (mem_do_prefetch || mem_do_rinst || mem_do_rdata) begin
 							mem_valid <= !mem_la_use_prefetched_high_word;
 							mem_instr <= mem_do_prefetch || mem_do_rinst;
@@ -701,7 +701,7 @@ module nanorv32 #(
 							mem_instr <= 0;
 							mem_state <= MEM_STATE_WRITE;
 						end
-					end
+					// end
 				end
 
 				MEM_STATE_READ: begin
@@ -1419,6 +1419,8 @@ module nanorv32 #(
 
 	reg [31:0] current_pc;
 
+	reg [31:0] mem_op_addr;		// temporary variable used in cpu_state_ldmem, cpu_state_stmem
+
 	// next_pc is only used by memory interface, where LSBs are masked and misalign is handled if enabled
 	assign next_pc = latched_store && latched_branch ? reg_out /*& ~1*/ : reg_next_pc;
 
@@ -1754,6 +1756,15 @@ module nanorv32 #(
 				mem_do_rinst <= !decoder_trigger && !do_waitirq;
 				mem_wordsize <= 0;
 
+				latched_store <= 0;
+				latched_stalu <= 0;
+				latched_branch <= 0;
+				latched_is_lu <= 0;
+				latched_is_lh <= 0;
+				latched_is_lb <= 0;
+				latched_rd <= decoded_rd;
+				latched_compr <= compressed_instr;
+
 				current_pc = reg_next_pc;
 
 				(* parallel_case *)
@@ -1761,8 +1772,17 @@ module nanorv32 #(
 					latched_branch: begin
 						current_pc = latched_store ? (latched_stalu ? alu_out_q : reg_out) /*& ~1*/ : reg_next_pc;
 						`debug($display("ST_RD:  %2d 0x%08x, BRANCH 0x%08x", latched_rd, reg_pc + (latched_compr ? 2 : 4), current_pc);)
-						if (!CATCH_MISALIGN)
-							current_pc = current_pc & (COMPRESSED_ISA ? ~1 : ~3);
+
+						// test misalign
+						if(CATCH_MISALIGN && (COMPRESSED_ISA ? current_pc[0] : |current_pc[1:0])) begin
+							`debug($display("MISALIGNED JUMP: 0x%08x", current_pc);)
+							do_trap(4'd0, current_pc);		// instruction address misaligned
+							decoder_trigger <= 1'b0;
+							// current_pc = reg_next_pc;
+						end
+
+						// if (!CATCH_MISALIGN)
+						current_pc = current_pc & (COMPRESSED_ISA ? ~1 : ~3);
 					end
 					latched_store && !latched_branch: begin
 						`debug($display("ST_RD:  %2d 0x%08x", latched_rd, latched_stalu ? alu_out_q : reg_out);)
@@ -1792,21 +1812,12 @@ module nanorv32 #(
 				reg_pc <= current_pc;
 				reg_next_pc <= current_pc;
 
-				latched_store <= 0;
-				latched_stalu <= 0;
-				latched_branch <= 0;
-				latched_is_lu <= 0;
-				latched_is_lh <= 0;
-				latched_is_lb <= 0;
-				latched_rd <= decoded_rd;
-				latched_compr <= compressed_instr;
+				// if(mem_do_rinst && mem_err_misaligned) begin
+				// 	do_trap(4'd0, reg_pc);		// instruction address misaligned
+				// 	decoder_trigger <= 1'b0;
+				// end
 
-				if(mem_do_rinst && mem_err_misaligned) begin
-					do_trap(4'd0, reg_pc);		// instruction address misaligned
-					decoder_trigger <= 1'b0;
-				end
-
-				else if (MACHINE_ISA && (decoder_trigger && mstatus_mie && /*!irq_delay &&*/ |(mie & mip))) begin
+				/*else*/ if (MACHINE_ISA && (decoder_trigger && mstatus_mie && /*!irq_delay &&*/ |(mie & mip))) begin
 					mtrap_prev <= mtrap;
 					reg_pc <= PROGADDR_IRQ;
 					reg_next_pc <= PROGADDR_IRQ;
@@ -2233,6 +2244,22 @@ module nanorv32 #(
 					reg_out <= reg_op2;
 				if (!mem_do_prefetch || mem_done) begin
 					if (!mem_do_wdata) begin
+						mem_op_addr = reg_op1 + decoded_imm;
+
+						// test misalign
+						if(CATCH_MISALIGN && 
+						   ((instr_sw && mem_op_addr[1:0] != 0) || (instr_sh && mem_op_addr[0] != 0)) ) begin
+							do_trap(4'd6, mem_op_addr);		// store address misaligned
+							// TODO: $display
+							case({instr_sw, instr_sh})
+								2'b10:		`debug($display("MISALIGNED SW: 0x%08x", mem_op_addr);)
+								2'b01:		`debug($display("MISALIGNED SH: 0x%08x", mem_op_addr);)
+								default:	`assert(0)
+							endcase
+						end
+						else
+							mem_do_wdata <= 1'b1;
+
 						(* parallel_case, full_case *)
 						case (1'b1)
 							instr_sb: mem_wordsize <= 2;
@@ -2243,19 +2270,16 @@ module nanorv32 #(
 							trace_valid <= 1;
 							trace_data <= /*(irq_active ? TRACE_IRQ : 0) |*/ TRACE_ADDR | ((reg_op1 + decoded_imm) & 32'hffffffff);
 						end
-						reg_op1 <= reg_op1 + decoded_imm;
-						// set_mem_do_wdata = 1;
-						mem_do_wdata <= 1'b1;
-						// TODO: catch misalign
+						reg_op1 <= mem_op_addr;
 					end
 					if (!mem_do_prefetch && mem_done) begin
-						if(!mem_err_misaligned) begin
+						// if(!mem_err_misaligned) begin
 							cpu_state <= cpu_state_fetch;
 							decoder_trigger <= 1;
 							decoder_pseudo_trigger <= 1;
-						end
-						else
-							do_trap(4'd6, reg_op1);		// store address misaligned
+						// end
+						// else
+						// 	do_trap(4'd6, reg_op1);		// store address misaligned
 					end
 				end
 			end
@@ -2264,6 +2288,22 @@ module nanorv32 #(
 				latched_store <= 1;
 				if (!mem_do_prefetch || mem_done) begin
 					if (!mem_do_rdata) begin
+						mem_op_addr = reg_op1 + decoded_imm;
+
+						// test misalign
+						if(CATCH_MISALIGN && 
+						   ((instr_lw && mem_op_addr[1:0] != 0) || (instr_lh && mem_op_addr[0] != 0)) ) begin
+							do_trap(4'd4, mem_op_addr);		// load address misaligned
+							// TODO: $display
+							case({instr_lw, instr_lh})
+								2'b10:		`debug($display("MISALIGNED LW: 0x%08x", mem_op_addr);)
+								2'b01:		`debug($display("MISALIGNED LH: 0x%08x", mem_op_addr);)
+								default:	`assert(0)
+							endcase
+						end
+						else
+							mem_do_rdata <= 1'b1;
+
 						(* parallel_case, full_case *)
 						case (1'b1)
 							instr_lb || instr_lbu: mem_wordsize <= 2;
@@ -2277,13 +2317,10 @@ module nanorv32 #(
 							trace_valid <= 1;
 							trace_data <= /*(irq_active ? TRACE_IRQ : 0) |*/ TRACE_ADDR | ((reg_op1 + decoded_imm) & 32'hffffffff);
 						end
-						reg_op1 <= reg_op1 + decoded_imm;
-						// set_mem_do_rdata = 1;
-						mem_do_rdata <= 1'b1;
-						// TODO: catch misalign
+						reg_op1 <= mem_op_addr;
 					end
 					if (!mem_do_prefetch && mem_done) begin
-						if(!mem_err_misaligned) begin
+						// if(!mem_err_misaligned) begin
 							(* parallel_case, full_case *)
 							case (1'b1)
 								latched_is_lu: reg_out <= mem_rdata_word;
@@ -2293,9 +2330,9 @@ module nanorv32 #(
 							decoder_trigger <= 1;
 							decoder_pseudo_trigger <= 1;
 							cpu_state <= cpu_state_fetch;
-						end
-						else
-							do_trap(4'd4, reg_op1);		// load address misaligned
+						// end
+						// else
+						// 	do_trap(4'd4, reg_op1);		// load address misaligned
 					end
 				end
 			end
