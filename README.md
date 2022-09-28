@@ -24,6 +24,7 @@ goals is to reduce the effort when porting an existing Risc-V code (such as Free
 - Creating and maintaining a ready-to-use FreeRTOS demo
 - Refactoring code for better readbility and maintainability
 - Future implementation of the floating point unit
+- Future implementation of in-system debugger interface
 - Making code ASIC synthesis-friendly
 - Providing examples for the cheap and popular FPGA evaluation boards (e.g. Intel Cyclone 10 LP, Digilent Arty S7, etc.)
 - Designing a pipelined version of the core
@@ -35,9 +36,15 @@ goals is to reduce the effort when porting an existing Risc-V code (such as Free
 Please refer to [YosysHQ/picorv32](https://github.com/YosysHQ/picorv32) for reference numbers, though they are not
 guaranteed to be met.
 
+#### Q: How to contribute?
+A: Any contribution is very welcome. I am going to work on this in my spare time only, so the development may be slow.
+If you want to contribute, make a fork, then make a branch and issue a Pull Request. Active contributors will be
+provided with the rights to maintain branches directly in my repo.
+
 
 #### Table of Contents
 
+- [Risc-V ISA Documentation](#risc-v-isa-documentation)
 - [Features and Typical Applications](#features-and-typical-applications)
 - [Repository Structure](#repository-structure)
 - [Verilog Module Parameters](#verilog-module-parameters)
@@ -46,6 +53,14 @@ guaranteed to be met.
 - [PicoRV32 Native Memory Interface](#picorv32-native-memory-interface)
 - [Pico Co-Processor Interface (PCPI)](#pico-co-processor-interface-pcpi)
 - [Obtaining RV32I Toolchain](#obtaining-rv32i-toolchain)
+
+
+Risc-V ISA Documentation
+------------------------
+
+The official [Risc-V](https://riscv.org/technical/specifications/) documentation shall always be used as a reference:
+- [Volume 1, Unprivileged Spec v. 20191213](https://github.com/riscv/riscv-isa-manual/releases/download/Ratified-IMAFDQC/riscv-spec-20191213.pdf)
+- [Volume 2, Privileged Spec v. 20211203](https://github.com/riscv/riscv-isa-manual/releases/download/Priv-v1.12/riscv-privileged-20211203.pdf)
 
 
 Features and Typical Applications
