@@ -351,6 +351,8 @@ If `ENABLE_IRQ_EXTERNAL` is 0, all related bits are read-only 0, including `MEIP
 
 #### ENABLE_IRQ_TIMER (default = 1)
 
+NOTE: this functionality shall be replaced by `mtime` in future.
+
 Enables support for the `timer` custom instruction. Has no effect if `MACHINE_ISA` is 0.
 
 The `timer` instruction resets the timer counter to a new value. The counter counts down clock cycles and
