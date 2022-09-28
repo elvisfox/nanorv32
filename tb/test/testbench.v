@@ -23,9 +23,12 @@ module testbench #(
 		resetn <= 1;
 	end
 
+	reg [1023:0] vcd_filename;
 	initial begin
 		if ($test$plusargs("vcd")) begin
-			$dumpfile("testbench.vcd");
+			if(!$value$plusargs("vcd=%s", vcd_filename))
+				vcd_filename = "testbench.vcd";
+			$dumpfile(vcd_filename);
 			$dumpvars(0, testbench);
 		end
 		repeat (1000000) @(posedge clk);
@@ -38,9 +41,12 @@ module testbench #(
 	wire [35:0] trace_data;
 	integer trace_file;
 
+	reg [1023:0] trace_filename;
 	initial begin
 		if ($test$plusargs("trace")) begin
-			trace_file = $fopen("testbench.trace", "w");
+			if(!$value$plusargs("trace=%s", trace_filename))
+				trace_filename = "testbench.trace";
+			trace_file = $fopen(trace_filename, "w");
 			repeat (10) @(posedge clk);
 			while (!trap) begin
 				@(posedge clk);
