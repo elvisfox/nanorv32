@@ -79,24 +79,37 @@
 // x8 is s0 and also fp
 #define regnum_fp   8
 
+// CSRs
+#define csr_custom_irq_mask		0x7C0
+#define csr_custom_irq_pend		0x7C1
+#define csr_custom_trap			0x7C2
+
 #define r_type_insn(_f7, _rs2, _rs1, _f3, _rd, _opc) \
 .word (((_f7) << 25) | ((_rs2) << 20) | ((_rs1) << 15) | ((_f3) << 12) | ((_rd) << 7) | ((_opc) << 0))
 
-#define picorv32_getq_insn(_rd, _qs) \
-r_type_insn(0b0000000, 0, regnum_ ## _qs, 0b100, regnum_ ## _rd, 0b0001011)
+# #define picorv32_getq_insn(_rd, _qs) \
+# r_type_insn(0b0000000, 0, regnum_ ## _qs, 0b100, regnum_ ## _rd, 0b0001011)
 
-#define picorv32_setq_insn(_qd, _rs) \
-r_type_insn(0b0000001, 0, regnum_ ## _rs, 0b010, regnum_ ## _qd, 0b0001011)
+# #define picorv32_setq_insn(_qd, _rs) \
+# r_type_insn(0b0000001, 0, regnum_ ## _rs, 0b010, regnum_ ## _qd, 0b0001011)
 
-#define picorv32_retirq_insn() \
-r_type_insn(0b0000010, 0, 0, 0b000, 0, 0b0001011)
+# #define picorv32_retirq_insn() \
+# r_type_insn(0b0000010, 0, 0, 0b000, 0, 0b0001011)
 
-#define picorv32_maskirq_insn(_rd, _rs) \
-r_type_insn(0b0000011, 0, regnum_ ## _rs, 0b110, regnum_ ## _rd, 0b0001011)
+# #define picorv32_maskirq_insn(_rd, _rs) \
+# r_type_insn(0b0000011, 0, regnum_ ## _rs, 0b110, regnum_ ## _rd, 0b0001011)
 
-#define picorv32_waitirq_insn(_rd) \
-r_type_insn(0b0000100, 0, 0, 0b100, regnum_ ## _rd, 0b0001011)
+# #define picorv32_waitirq_insn(_rd) \
+# r_type_insn(0b0000100, 0, 0, 0b100, regnum_ ## _rd, 0b0001011)
+
+# #define picorv32_trigirq_insn(_rs) \
+# r_type_insn(0b0001000, 0, regnum_ ## _rs, 0b100, 0, 0b0001011)
 
 #define picorv32_timer_insn(_rd, _rs) \
 r_type_insn(0b0000101, 0, regnum_ ## _rs, 0b110, regnum_ ## _rd, 0b0001011)
 
+# #define picorv32_disirq_insn() \
+# r_type_insn(0b0000110, 0, 0, 0b000, 0, 0b0001011)
+
+# #define picorv32_enairq_insn() \
+# r_type_insn(0b0000111, 0, 0, 0b000, 0, 0b0001011)

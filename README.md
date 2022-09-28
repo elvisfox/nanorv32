@@ -1,33 +1,66 @@
 
-PicoRV32 - A Size-Optimized RISC-V CPU
+NanoRV32 - [Work in progress] A small RV32I\[MC\] core capable of running RTOS
 ======================================
 
-PicoRV32 is a CPU core that implements the [RISC-V RV32IMC Instruction Set](http://riscv.org/).
-It can be configured as RV32E, RV32I, RV32IC, RV32IM, or RV32IMC core, and optionally
-contains a built-in interrupt controller.
+NanoRV32 is a fork of [YosysHQ/picorv32](https://github.com/YosysHQ/picorv32).
+Small Q&A below explains certain ideas behind this project.
 
-Tools (gcc, binutils, etc..) can be obtained via the [RISC-V Website](https://riscv.org/software-status/).
-The examples bundled with PicoRV32 expect various RV32 toolchains to be installed in `/opt/riscv32i[m][c]`. See
-the [build instructions below](#building-a-pure-rv32i-toolchain) for details.
-Many Linux distributions now include the tools for RISC-V (for example
-Ubuntu 20.04 has `gcc-riscv64-unknown-elf`). To compile using those set
-`TOOLCHAIN_PREFIX` accordingly (eg. `make TOOLCHAIN_PREFIX=riscv64-unknown-elf-`).
+#### Q: What is NanoRV32?
+A: NanoRV32 is a CPU core that implements the [RISC-V RV32IMC Instruction Set](http://riscv.org/).
+It can be configured as RV32E, RV32I, RV32IC, RV32IM, or RV32IMC core, and optionally a Machine mode ISA
+from the Risc-V Privileged Architecture specification (which implies a built-in interrupt controller).
 
-PicoRV32 is free and open hardware licensed under the [ISC license](http://en.wikipedia.org/wiki/ISC_license)
+NanoRV32 is free and open hardware licensed under the [ISC license](http://en.wikipedia.org/wiki/ISC_license)
 (a license that is similar in terms to the MIT license or the 2-clause BSD license).
+
+#### Q: Why a separate project?
+A: The main reason is the absence of backward compatibility to picorv32 especially when it comes to interrupt handling.
+The goal of NanoRV32 is to implement the Priviledged ISA according to the official specification, while still keeping
+the core minimalistic and small. The core is limited to Machine mode only. The key features compared to picorv32 are the
+nested interrupts, the mechanisms to implement interrupt priorities, more powerful trap handling. Of course one of the 
+goals is to reduce the effort when porting an existing Risc-V code (such as FreeRTOS).
+
+#### Q: What is in scope of the project?
+- Creating and maintaining a ready-to-use FreeRTOS demo
+- Refactoring code for better readbility and maintainability
+- Future implementation of the floating point unit
+- Future implementation of in-system debugger interface
+- Making code ASIC synthesis-friendly
+- Providing examples for the cheap and popular FPGA evaluation boards (e.g. Intel Cyclone 10 LP, Digilent Arty S7, etc.)
+- Designing a pipelined version of the core
+
+#### Q: What is out of scope of the project?
+- Scripts for building the toolchain. You should be able to obtain the toolchain from elsewhere.
+- picosoc and other loosely related stuff from the original repo (except if to provide working examples for FPGA boards)
+- Benchmarks on performance, area and Fmax (unless you want to contribute by porting them from the original repo).
+Please refer to [YosysHQ/picorv32](https://github.com/YosysHQ/picorv32) for reference numbers, though they are not
+guaranteed to be met.
+
+#### Q: How to contribute?
+A: Any contribution is very welcome. I am going to work on this in my spare time only, so the development may be slow.
+If you want to contribute, make a fork, then make a branch and issue a Pull Request. Active contributors will be
+provided with the rights to maintain branches directly in my repo.
+
 
 #### Table of Contents
 
+- [Risc-V ISA Documentation](#risc-v-isa-documentation)
 - [Features and Typical Applications](#features-and-typical-applications)
-- [Files in this Repository](#files-in-this-repository)
+- [Repository Structure](#repository-structure)
 - [Verilog Module Parameters](#verilog-module-parameters)
+- [Priviledged ISA Control and Status Registers](#priviledged-isa-control-and-status-registers)
 - [Cycles per Instruction Performance](#cycles-per-instruction-performance)
 - [PicoRV32 Native Memory Interface](#picorv32-native-memory-interface)
 - [Pico Co-Processor Interface (PCPI)](#pico-co-processor-interface-pcpi)
-- [Custom Instructions for IRQ Handling](#custom-instructions-for-irq-handling)
-- [Building a pure RV32I Toolchain](#building-a-pure-rv32i-toolchain)
-- [Linking binaries with newlib for PicoRV32](#linking-binaries-with-newlib-for-picorv32)
-- [Evaluation: Timing and Utilization on Xilinx 7-Series FPGAs](#evaluation-timing-and-utilization-on-xilinx-7-series-fpgas)
+- [Obtaining RV32I Toolchain](#obtaining-rv32i-toolchain)
+
+
+Risc-V ISA Documentation
+------------------------
+
+The official [Risc-V](https://riscv.org/technical/specifications/) documentation shall always be used as a reference:
+- [Volume 1, Unprivileged Spec v. 20191213](https://github.com/riscv/riscv-isa-manual/releases/download/Ratified-IMAFDQC/riscv-spec-20191213.pdf)
+- [Volume 2, Privileged Spec v. 20211203](https://github.com/riscv/riscv-isa-manual/releases/download/Priv-v1.12/riscv-privileged-20211203.pdf)
 
 
 Features and Typical Applications
@@ -56,20 +89,20 @@ the latter results in a smaller core.
 resources, such as many FPGAs, disabling the 16 upper registers and/or
 disabling the dual-port register file may not further reduce the core size.*
 
-The core exists in three variations: `picorv32`, `picorv32_axi` and `picorv32_wb`.
+The core exists in three variations: `nanorv32`, `nanorv32_axi` and `nanorv32_wb`.
 The first provides a simple native memory interface, that is easy to use in simple
-environments. `picorv32_axi` provides an AXI-4 Lite Master interface that can
+environments. `nanorv32_axi` provides an AXI-4 Lite controller interface that can
 easily be integrated with existing systems that are already using the AXI
-standard. `picorv32_wb` provides a Wishbone master interface.
+standard. `nanorv32_wb` provides a Wishbone controller interface.
 
-A separate core `picorv32_axi_adapter` is provided to bridge between the native
-memory interface and AXI4. This core can be used to create custom cores that
+A separate module `picorv32_axi_adapter` is provided to bridge between the native
+memory interface and AXI4. This module can be used to create custom cores that
 include one or more PicoRV32 cores together with local RAM, ROM, and
 memory-mapped peripherals, communicating with each other using the native
 interface, and communicating with the outside world via AXI4.
 
-The optional IRQ feature can be used to react to events from the outside, implement
-fault handlers, or catch instructions from a larger ISA and emulate them in
+The optional Machine mode ISA support can be used to react to events from the outside,
+implement fault handlers, or catch instructions from a larger ISA and emulate them in
 software.
 
 The optional Pico Co-Processor Interface (PCPI) can be used to implement
@@ -78,68 +111,50 @@ of PCPI cores that implement the M Standard Extension instructions
 `MUL[H[SU|U]]` and `DIV[U]/REM[U]` are included in this package.
 
 
-Files in this Repository
-------------------------
+Repository Structure
+--------------------
 
 #### README.md
 
 You are reading it right now.
 
-#### picorv32.v
+#### rtl
 
-This Verilog file contains the following Verilog modules:
+This folder contains the following Verilog modules. Each module is defined in a separate file with
+the identical name.
+
+The modules named `picorv32_*` are transferred as-is from the original repo.
 
 | Module                   | Description                                                           |
 | ------------------------ | --------------------------------------------------------------------- |
-| `picorv32`               | The PicoRV32 CPU                                                      |
-| `picorv32_axi`           | The version of the CPU with AXI4-Lite interface                       |
+| `nanorv32`               | The NanoRV32 CPU                                                      |
+| `nanorv32_axi`           | The version of the CPU with AXI4-Lite interface                       |
 | `picorv32_axi_adapter`   | Adapter from PicoRV32 Memory Interface to AXI4-Lite                   |
-| `picorv32_wb`            | The version of the CPU with Wishbone Master interface                 |
+| `nanorv32_wb`            | The version of the CPU with Wishbone controller interface             |
 | `picorv32_pcpi_mul`      | A PCPI core that implements the `MUL[H[SU\|U]]` instructions          |
 | `picorv32_pcpi_fast_mul` | A version of `picorv32_pcpi_fast_mul` using a single cycle multiplier |
 | `picorv32_pcpi_div`      | A PCPI core that implements the `DIV[U]/REM[U]` instructions          |
-
-Simply copy this file into your project.
 
 #### Makefile and testbenches
 
 A basic test environment. Run `make test` to run the standard test bench (`testbench.v`)
 in the standard configurations. There are other test benches and configurations. See
-the `test_*` make target in the Makefile for details.
+the `test_*` make target in the Makefile for details. These targets are using Icarus Verilog.
 
-Run `make test_ez` to run `testbench_ez.v`, a very simple test bench that does
-not require an external firmware .hex file. This can be useful in environments
-where the RISC-V compiler toolchain is not available.
+Also there are scripts to run the testbenches in [QuestaSim](https://www.intel.com/content/www/us/en/software/programmable/quartus-prime/questa-edition.html) (free Starter Edition is enough). See `tb/test/run_questasim*.do`.
 
-*Note: The test bench is using Icarus Verilog. However, Icarus Verilog 0.9.7
-(the latest release at the time of writing) has a few bugs that prevent the
-test bench from running. Upgrade to the latest github master of Icarus Verilog
-to run the test bench.*
+#### fw/
 
-#### firmware/
+Contains the firmwares (each in a separate subfolder)
 
-A simple test firmware. This runs the basic tests from `tests/`, some C code, tests IRQ
-handling and the multiply PCPI core.
+The folder `fw/test/` contains a simple test firmware. This runs the basic tests from `fw/test/tests/`,
+some C code, tests IRQ and trap handling and the multiply PCPI core.
 
-All the code in `firmware/` is in the public domain. Simply copy whatever you can use.
+All the code in `fw/` is in the public domain. Simply copy whatever you can use.
 
-#### tests/
+#### tb/
 
-Simple instruction-level tests from [riscv-tests](https://github.com/riscv/riscv-tests).
-
-#### dhrystone/
-
-Another simple test firmware that runs the Dhrystone benchmark.
-
-#### picosoc/
-
-A simple example SoC using PicoRV32 that can execute code directly from a
-memory mapped SPI flash.
-
-#### scripts/
-
-Various scripts and examples for different (synthesis) tools and hardware architectures.
-
+Contains the testbenches (each in a separate subfolder).
 
 Verilog Module Parameters
 -------------------------
@@ -179,12 +194,12 @@ the core.
 #### LATCHED_MEM_RDATA (default = 0)
 
 Set this to 1 if the `mem_rdata` is kept stable by the external circuit after a
-transaction. In the default configuration the PicoRV32 core only expects the
+transaction. In the default configuration the core only expects the
 `mem_rdata` input to be valid in the cycle with `mem_valid && mem_ready` and
 latches the value internally.
 
-This parameter is only available for the `picorv32` core. In the
-`picorv32_axi` and `picorv32_wb` core this is implicitly set to 0.
+This parameter is only available for the `nanorv32` core. In the
+`nanorv32_axi` and `nanorv32_wb` core this is implicitly set to 0.
 
 #### TWO_STAGE_SHIFT (default = 1)
 
@@ -223,10 +238,18 @@ This enables support for the RISC-V Compressed Instruction Set.
 
 #### CATCH_MISALIGN (default = 1)
 
+If `MACHINE_ISA` is set, a misaligned memory access or jump will generate an exception
+and give control to the trap handler. Otherwise the core will stall and set the `trap`
+output signal high.
+
 Set this to 0 to disable the circuitry for catching misaligned memory
 accesses.
 
 #### CATCH_ILLINSN (default = 1)
+
+If `MACHINE_ISA` is set, an illegal instruction will cause an exception and transfer 
+of the control to the trap handler. Otherwise the core will stall and set the `trap`
+output signal high.
 
 Set this to 0 to disable the circuitry for catching illegal instructions.
 
@@ -249,6 +272,7 @@ interface only becomes functional when ENABLE_PCPI is set as well.
 
 This parameter internally enables PCPI and instantiates the `picorv32_pcpi_fast_mul`
 core that implements the `MUL[H[SU|U]]` instructions. The external PCPI
+
 interface only becomes functional when ENABLE_PCPI is set as well.
 
 If both ENABLE_MUL and ENABLE_FAST_MUL are set then the ENABLE_MUL setting
@@ -260,28 +284,107 @@ This parameter internally enables PCPI and instantiates the `picorv32_pcpi_div`
 core that implements the `DIV[U]/REM[U]` instructions. The external PCPI
 interface only becomes functional when ENABLE_PCPI is set as well.
 
-#### ENABLE_IRQ (default = 0)
+#### MACHINE_ISA (default = 0)
 
-Set this to 1 to enable IRQs. (see "Custom Instructions for IRQ Handling" below
-for a discussion of IRQs)
+Set this to 1 in order to enable the instructions `csrrw`, `csrrs`, `csrrc`, `csrrwi`, `csrrsi`, `csrrci`,
+`wfi`, `mret`. In such case all exceptions will transfer the control to `PROGADDR_IRQ`.
 
-#### ENABLE_IRQ_QREGS (default = 1)
+The list of available CSRs is avaiable in [Priviledged ISA Control and Status Registers](#priviledged-isa-control-and-status-registers).
 
-Set this to 0 to disable support for the `getq` and `setq` instructions. Without
-the q-registers, the irq return address will be stored in x3 (gp) and the IRQ
-bitmask in x4 (tp), the global pointer and thread pointer registers according
-to the RISC-V ABI.  Code generated from ordinary C code will not interact with
-those registers.
+Access to a non existent CSR causes an invalid instruction exception.
 
-Support for q-registers is always disabled when ENABLE_IRQ is set to 0.
+#### ENABLE_CSR_MSCRATCH (default = 1)
+
+Enables `mscratch` CSR which can be used by the software for any purpose. This register is never
+written by the implementation.
+
+Has no effect if `MACHINE_ISA` is 0.
+
+#### ENABLE_CSR_MTVAL (default = 1)
+
+Enables `mtval` CSR which is written by the implementation when an exception occurs. It contains
+additional information about the exception that can be used by the software.
+
+- Invalid instruction exception: `mtval` is the same as `mepc` and contains the address of the invalid instruction.
+- Misaligned jump/branch: `mtval` contains the jump/branch destination, while `mepc` contains the address of 
+the jump/branch instruction itself.
+- Misaligned load/store: `mtval` contains the memory address that caused the exception, while `mepc` contains
+the address of the load/store instruction itself.
+
+Has no effect if `MACHINE_ISA` is 0.
+
+#### ENABLE_CSR_CUSTOM_TRAP (default = 1)
+
+Enables `csr_custom_trap` CSR, which contains bits `mtrap` and `mtrap_prev`.
+
+`mtrap` is set 1 when an exception is generated (but remains unchanged upon an interrupt), while `mtrap_prev` stores
+the previous value of `mtrap`. `mtrap_prev` is updated with the value of `mtrap` upon an interrupt too. If another
+exception is generated while `mtrap` is 1, the CPU is stalled and `trap` output is set high.
+
+Upon `mret` the `mtrap` is updated with the value of `mtrap_prev`. `mtrap_prev` remains unchanged.
+
+If `ENABLE_CSR_CUSTOM_TRAP` is 0, the CPU is never stalled, and the `trap` output is never set high, but a circular
+exception might occur if the trap handler produces another exception.
+
+Has no effect if `MACHINE_ISA` is 0.
+
+#### ENABLE_IRQ_EXTERNAL (default = 1)
+
+Enables external interrupts and two additional CSRs: `csr_custom_irq_mask` and `csr_custom_irq_pend`.
+Has no effect if `MACHINE_ISA` is 0.
+
+External interrupts are driven by `irq[31:0]` inputs. `MASKED_IRQ` parameter allows to disable specific inputs, while 
+`LATCHED_IRQ` parameter allows to switch between edge and level sensitivity.
+
+The CSR `csr_custom_irq_mask` allows software to enable/disable each interrupt source (logic 1 means interrupt is
+enabled). The CSR `csr_custom_irq_pend` contains interrupt pending bits. For the edge sensitive interrupts
+(`LATCHED_IRQ`) the software must clear the corresponding bits in `csr_custom_irq_pend` when the interrupt is handled.
+
+Bit `MEIE` in `mie` CSR acts as a global enable bit for the external interrupts. Bit `MEIP` in `mip` CSR is read only
+and indicates that an external interrupt is pending. It is automatically cleared when either all interrupt pending bits
+are cleared in `csr_custom_irq_pend` or corresponding interrupt sources are disabled in `csr_custom_irq_mask`.
+
+The outputs `eoi[31:0]` generate single clock strobes when a bit in `csr_custom_irq_pend` is cleared. None of the
+interrupt enable bits (neither local nor global) have no impact on `eoi[31:0]` behavior.
+
+If `ENABLE_IRQ_EXTERNAL` is 0, all related bits are read-only 0, including `MEIP` and `MEIE`.
 
 #### ENABLE_IRQ_TIMER (default = 1)
 
-Set this to 0 to disable support for the `timer` instruction.
+NOTE: this functionality shall be replaced by `mtime` in future.
 
-Support for the timer is always disabled when ENABLE_IRQ is set to 0.
+Enables support for the `timer` custom instruction. Has no effect if `MACHINE_ISA` is 0.
+
+The `timer` instruction resets the timer counter to a new value. The counter counts down clock cycles and
+triggers the timer interrupt when transitioning from 1 to 0. Setting the counter to zero disables the timer.
+The old value of the counter is written to `rd`.
+
+    0000101 ----- XXXXX --- XXXXX 0001011
+    f7      rs2   rs    f3  rd    opcode
+
+Example:
+
+    timer x1, x2
+
+The timer interrupt sets the bit `MTIP` in `mip` CSR. This bit must be cleared by the software.
+The timer interrupt is enabled through the bit `MTIE` in `mie` CSR.
+
+If `ENABLE_IRQ_TIMER` is 0, `MTIP` and `MTIE` bits are read-only 0.
+
+#### ENABLE_IRQ_SOFTWARE (default = 1)
+
+Enables the support for the software interrupt. The software interrupt can be triggered by writing 1 in `MSIP` bit in
+`mip` CSR. Bit `MSIE` in `mie` CSR acts as an interrupt enable bit for the software interrupt. There is only one
+software interrupt, so if multiple software interrupts are required, the software must define its own ways to pass
+this information to the handler.
+
+If `ENABLE_IRQ_SOFTWARE` is 0, `MSIP` and `MSIE` bits are read-only 0.
+
+Has no effect if `MACHINE_ISA` is 0.
 
 #### ENABLE_TRACE (default = 0)
+
+NOTE: Trace functionality has not been adjusted to work with the Machine ISA. Please feel free to contribute.
 
 Produce an execution trace using the `trace_valid` and `trace_data` output ports.
 For a demontration of this feature run `make test_vcd` to create a trace file
@@ -313,7 +416,8 @@ The start address of the program.
 
 #### PROGADDR_IRQ (default = 32'h 0000_0010)
 
-The start address of the interrupt handler.
+The start address of the exception handler. The same handler is used for interrupts and traps, but the software
+may analyse CSRs and pass control to a dedicated handler.
 
 #### STACKADDR (default = 32'h ffff_ffff)
 
@@ -323,6 +427,69 @@ uninitialized.) Note that the RISC-V calling convention requires the stack point
 to be aligned on 16 bytes boundaries (4 bytes for the RV32I soft float calling
 convention).
 
+
+Priviledged ISA Control and Status Registers
+--------------------------------------------
+
+All CSRs listed below can be accessed for both reading and writing. Writing read-only fields has no effect.
+If some features are disabled through Verilog module parameters, some fields may become read only 0. See
+corresponding parameters description for details.
+
+| Address | Name              | 31 |      |  0 |
+| --------| ------------------|:--:|:----:|:--:|
+| 0xF11   | mvendorid         |    | ro 0 |    |
+| 0xF12   | marchid           |    | ro 0 |    |
+| 0xF13   | mimpid            |    | ro 0 |    |
+| 0xF14   | mhartid           |    | ro 0 |    |
+| 0xF15   | mconfigptr        |    | ro 0 |    |
+
+| Address | Name              | 31 |      |  8 |   7  |  6 |      |  4 |  3  |  2 |      |  0 |
+| --------| ------------------|:--:|:----:|:--:|:----:|:--:|:----:|:--:|:---:|:--:|:----:|:--:|
+| 0x300   | mstatus           |    | ro 0 |    | MPIE |    | ro 0 |    | MIE |    | ro 0 |    |
+
+| Address | Name              | 31 |      |  0 |
+| --------| ------------------|:--:|:----:|:--:|
+| 0x301   | misa              |    | ro 0 |    |
+| 0x310   | mstatush          |    | ro 0 |    |
+
+| Address | Name              | 31 |      | 12 |  11  | 10 |      |  8 |   7  |  6 |      |  4 |   3  |  2 |      |  0 |
+| --------| ------------------|:--:|:----:|:--:|:----:|:--:|:----:|:--:|:----:|:--:|:----:|:--:|:----:|:--:|:----:|:--:|
+| 0x304   | mie               |    | ro 0 |    | MEIE |    | ro 0 |    | MTIE |    | ro 0 |    | MSIE |    | ro 0 |    |
+| 0x344   | mip               |    | ro 0 |    | MEIP |    | ro 0 |    | MTIP |    | ro 0 |    | MSIP |    | ro 0 |    |
+
+| Address | Name              | 31 |                                                               |  0 |
+| --------| ------------------|:--:| ------------------------------------------------------------- |:--:|
+| 0x305   | mtvec             |    | read only machine trap vector (contains `PROGADDR_IRQ` value) |    |
+| 0x340   | mscratch          |    | machine scratch register for any software purpose             |    |
+| 0x341   | mepc              |    | machine trap return address (used by `mret` instruction)      |    |
+| 0x343   | mtval             |    | machine trap value register                                   |    |
+
+| Address | Name              | 31          | 30 |      |  4 |  3 |                |  0 |
+| --------| ------------------|:-----------:|:--:|:----:|:--:|:--:|:--------------:|:--:|
+| 0x342   | mcause            | Interrupt   |    | ro 0 |    |    | Exception Code |    |
+
+| Address | Name                | 31 |                                              |  0 |
+| --------| --------------------|:--:| -------------------------------------------- |:--:|
+| 0x7C0   | csr_custom_irq_mask |    | external interrupt enable bits (1: enabled)  |    |
+| 0x7C1   | csr_custom_irq_pend |    | external interrupt pending bits (1: pending) |    |
+
+| Address | Name              | 31 |      |  2 |      1     |   0   |
+| --------| ------------------|:--:|:----:|:--:|:----------:|:-----:|
+| 0x7C2   | csr_custom_trap   |    | ro 0 |    | mtrap_prev | mtrap |
+
+Valid values of `mcause` CSR are listed in the table below.
+
+| Interrupt | Exception Code | Description                                               |
+| ---------:| --------------:| --------------------------------------------------------- |
+|         1 |              3 | Machine software interrupt                                |
+|         1 |              7 | Machine timer interrupt                                   |
+|         1 |             11 | Machine external interrupt                                |
+|         0 |              0 | Instruction address misaligned                            |
+|         0 |              2 | Illegal instruction                                       |
+|         0 |              3 | Breakpoint (`ebreak`)                                     |
+|         0 |              4 | Load address misaligned                                   |
+|         0 |              6 | Store address misaligned                                  |
+|         0 |             11 | Environment call from M-mode (`ecall`)                    |
 
 Cycles per Instruction Performance
 ----------------------------------
@@ -353,22 +520,13 @@ a core built without ENABLE_REGS_DUALPORT.
 When `ENABLE_MUL` is activated, then a `MUL` instruction will execute
 in 40 cycles and a `MULH[SU|U]` instruction will execute in 72 cycles.
 
+`ENABLE_FAST_MUL` parameter can enable the fast multiplication.
+
 When `ENABLE_DIV` is activated, then a `DIV[U]/REM[U]` instruction will
 execute in 40 cycles.
 
 When `BARREL_SHIFTER` is activated, a shift operation takes as long as
 any other ALU operation.
-
-The following dhrystone benchmark results are for a core with enabled
-`ENABLE_FAST_MUL`, `ENABLE_DIV`, and `BARREL_SHIFTER` options.
-
-Dhrystone benchmark results: 0.516 DMIPS/MHz (908 Dhrystones/Second/MHz)
-
-For the Dhrystone benchmark the average CPI is 4.100.
-
-Without using the look-ahead memory interface (usually required for max
-clock speed), this results drop to 0.305 DMIPS/MHz and 5.232 CPI.
-
 
 PicoRV32 Native Memory Interface
 --------------------------------
@@ -474,265 +632,19 @@ it asserts `pcpi_ready`. This will prevent the PicoRV32 core from raising
 an illegal instruction exception.
 
 
-Custom Instructions for IRQ Handling
-------------------------------------
+Obtaining RV32I Toolchain
+-------------------------
 
-*Note: The IRQ handling features in PicoRV32 do not follow the RISC-V
-Privileged ISA specification. Instead a small set of very simple custom
-instructions is used to implement IRQ handling with minimal hardware
-overhead.*
+On Windows I recommend the following options:
+- [Prebuilt Windows Toolchain for RISC-V](https://gnutoolchains.com/risc-v/)
+- Install [MSYS2](https://www.msys2.org/), then install the package group [mingw-w64-i686-riscv64-unknown-elf-toolchain](https://packages.msys2.org/group/mingw-w64-i686-riscv64-unknown-elf-toolchain)
 
-The following custom instructions are only supported when IRQs are enabled
-via the `ENABLE_IRQ` parameter (see above).
+Many Linux distributions now include the tools for RISC-V (for example
+Ubuntu 22.04 has [gcc-riscv64-unknown-elf](https://packages.ubuntu.com/search?keywords=gcc-riscv64-unknown-elf)).
 
-The PicoRV32 core has a built-in interrupt controller with 32 interrupt inputs. An
-interrupt can be triggered by asserting the corresponding bit in the `irq`
-input of the core.
+On macOS one can use [Homebrew](https://brew.sh/) with the following recipe: [homebrew-riscv](https://github.com/riscv-software-src/homebrew-riscv).
 
-When the interrupt handler is started, the `eoi` End Of Interrupt (EOI) signals
-for the handled interrupts go high. The `eoi` signals go low again when the
-interrupt handler returns.
+Tools (gcc, binutils, etc..) can also be obtained via the [RISC-V Website](https://riscv.org/software-status/).
 
-The IRQs 0-2 can be triggered internally by the following built-in interrupt sources:
-
-| IRQ | Interrupt Source                    |
-| ---:| ------------------------------------|
-|   0 | Timer Interrupt                     |
-|   1 | EBREAK/ECALL or Illegal Instruction |
-|   2 | BUS Error (Unalign Memory Access)   |
-
-This interrupts can also be triggered by external sources, such as co-processors
-connected via PCPI.
-
-The core has 4 additional 32-bit registers `q0 .. q3` that are used for IRQ
-handling. When the IRQ handler is called, the register `q0` contains the return
-address and `q1` contains a bitmask of all IRQs to be handled. This means one
-call to the interrupt handler needs to service more than one IRQ when more than
-one bit is set in `q1`.
-
-When support for compressed instructions is enabled, then the LSB of q0 is set
-when the interrupted instruction is a compressed instruction. This can be used if
-the IRQ handler wants to decode the interrupted instruction.
-
-Registers `q2` and `q3` are uninitialized and can be used as temporary storage
-when saving/restoring register values in the IRQ handler.
-
-All of the following instructions are encoded under the `custom0` opcode. The f3
-and rs2 fields are ignored in all this instructions.
-
-See [firmware/custom_ops.S](firmware/custom_ops.S) for GNU assembler macros that
-implement mnemonics for this instructions.
-
-See [firmware/start.S](firmware/start.S) for an example implementation of an
-interrupt handler assembler wrapper, and [firmware/irq.c](firmware/irq.c) for
-the actual interrupt handler.
-
-#### getq rd, qs
-
-This instruction copies the value from a q-register to a general-purpose
-register.
-
-    0000000 ----- 000XX --- XXXXX 0001011
-    f7      rs2   qs    f3  rd    opcode
-
-Example:
-
-    getq x5, q2
-
-#### setq qd, rs
-
-This instruction copies the value from a general-purpose register to a
-q-register.
-
-    0000001 ----- XXXXX --- 000XX 0001011
-    f7      rs2   rs    f3  qd    opcode
-
-Example:
-
-    setq q2, x5
-
-#### retirq
-
-Return from interrupt. This instruction copies the value from `q0`
-to the program counter and re-enables interrupts.
-
-    0000010 ----- 00000 --- 00000 0001011
-    f7      rs2   rs    f3  rd    opcode
-
-Example:
-
-    retirq
-
-#### maskirq
-
-The "IRQ Mask" register contains a bitmask of masked (disabled) interrupts.
-This instruction writes a new value to the irq mask register and reads the old
-value.
-
-    0000011 ----- XXXXX --- XXXXX 0001011
-    f7      rs2   rs    f3  rd    opcode
-
-Example:
-
-    maskirq x1, x2
-
-The processor starts with all interrupts disabled.
-
-An illegal instruction or bus error while the illegal instruction or bus error
-interrupt is disabled will cause the processor to halt.
-
-#### waitirq
-
-Pause execution until an interrupt becomes pending. The bitmask of pending IRQs
-is written to `rd`.
-
-    0000100 ----- 00000 --- XXXXX 0001011
-    f7      rs2   rs    f3  rd    opcode
-
-Example:
-
-    waitirq x1
-
-#### timer
-
-Reset the timer counter to a new value. The counter counts down clock cycles and
-triggers the timer interrupt when transitioning from 1 to 0. Setting the
-counter to zero disables the timer. The old value of the counter is written to
-`rd`.
-
-    0000101 ----- XXXXX --- XXXXX 0001011
-    f7      rs2   rs    f3  rd    opcode
-
-Example:
-
-    timer x1, x2
-
-
-Building a pure RV32I Toolchain
--------------------------------
-
-TL;DR: Run the following commands to build the complete toolchain:
-
-    make download-tools
-    make -j$(nproc) build-tools
-
-The default settings in the [riscv-tools](https://github.com/riscv/riscv-tools) build
-scripts will build a compiler, assembler and linker that can target any RISC-V ISA,
-but the libraries are built for RV32G and RV64G targets. Follow the instructions
-below to build a complete toolchain (including libraries) that target a pure RV32I
-CPU.
-
-The following commands will build the RISC-V GNU toolchain and libraries for a
-pure RV32I target, and install it in `/opt/riscv32i`:
-
-    # Ubuntu packages needed:
-    sudo apt-get install autoconf automake autotools-dev curl libmpc-dev \
-            libmpfr-dev libgmp-dev gawk build-essential bison flex texinfo \
-	    gperf libtool patchutils bc zlib1g-dev git libexpat1-dev
-
-    sudo mkdir /opt/riscv32i
-    sudo chown $USER /opt/riscv32i
-
-    git clone https://github.com/riscv/riscv-gnu-toolchain riscv-gnu-toolchain-rv32i
-    cd riscv-gnu-toolchain-rv32i
-    git checkout 411d134
-    git submodule update --init --recursive
-
-    mkdir build; cd build
-    ../configure --with-arch=rv32i --prefix=/opt/riscv32i
-    make -j$(nproc)
-
-The commands will all be named using the prefix `riscv32-unknown-elf-`, which
-makes it easy to install them side-by-side with the regular riscv-tools (those
-are using the name prefix `riscv64-unknown-elf-` by default).
-
-Alternatively you can simply use one of the following make targets from PicoRV32's
-Makefile to build a `RV32I[M][C]` toolchain. You still need to install all
-prerequisites, as described above. Then run any of the following commands in the
-PicoRV32 source directory:
-
-| Command                                  | Install Directory  | ISA       |
-|:---------------------------------------- |:------------------ |:--------  |
-| `make -j$(nproc) build-riscv32i-tools`   | `/opt/riscv32i/`   | `RV32I`   |
-| `make -j$(nproc) build-riscv32ic-tools`  | `/opt/riscv32ic/`  | `RV32IC`  |
-| `make -j$(nproc) build-riscv32im-tools`  | `/opt/riscv32im/`  | `RV32IM`  |
-| `make -j$(nproc) build-riscv32imc-tools` | `/opt/riscv32imc/` | `RV32IMC` |
-
-Or simply run `make -j$(nproc) build-tools` to build and install all four tool chains.
-
-By default calling any of those make targets will (re-)download the toolchain
-sources. Run `make download-tools` to download the sources to `/var/cache/distfiles/`
-once in advance.
-
-*Note: These instructions are for git rev 411d134 (2018-02-14) of riscv-gnu-toolchain.*
-
-
-Linking binaries with newlib for PicoRV32
------------------------------------------
-
-The tool chains (see last section for install instructions) come with a version of
-the newlib C standard library.
-
-Use the linker script [firmware/riscv.ld](firmware/riscv.ld) for linking binaries
-against the newlib library. Using this linker script will create a binary that
-has its entry point at 0x10000. (The default linker script does not have a static
-entry point, thus a proper ELF loader would be needed that can determine the
-entry point at runtime while loading the program.)
-
-Newlib comes with a few syscall stubs. You need to provide your own implementation
-of those syscalls and link your program with this implementation, overwriting the
-default stubs from newlib. See `syscalls.c` in [scripts/cxxdemo/](scripts/cxxdemo/)
-for an example of how to do that.
-
-
-Evaluation: Timing and Utilization on Xilinx 7-Series FPGAs
------------------------------------------------------------
-
-The following evaluations have been performed with Vivado 2017.3.
-
-#### Timing on Xilinx 7-Series FPGAs
-
-The `picorv32_axi` module with enabled `TWO_CYCLE_ALU` has been placed and
-routed for Xilinx Artix-7T, Kintex-7T, Virtex-7T, Kintex UltraScale, and Virtex
-UltraScale devices in all speed grades. A binary search is used to find the
-shortest clock period for which the design meets timing.
-
-See `make table.txt` in [scripts/vivado/](scripts/vivado/).
-
-| Device                    | Device               | Speedgrade | Clock Period (Freq.) |
-|:------------------------- |:---------------------|:----------:| --------------------:|
-| Xilinx Kintex-7T          | xc7k70t-fbg676-2     | -2         |     2.4 ns (416 MHz) |
-| Xilinx Kintex-7T          | xc7k70t-fbg676-3     | -3         |     2.2 ns (454 MHz) |
-| Xilinx Virtex-7T          | xc7v585t-ffg1761-2   | -2         |     2.3 ns (434 MHz) |
-| Xilinx Virtex-7T          | xc7v585t-ffg1761-3   | -3         |     2.2 ns (454 MHz) |
-| Xilinx Kintex UltraScale  | xcku035-fbva676-2-e  | -2         |     2.0 ns (500 MHz) |
-| Xilinx Kintex UltraScale  | xcku035-fbva676-3-e  | -3         |     1.8 ns (555 MHz) |
-| Xilinx Virtex UltraScale  | xcvu065-ffvc1517-2-e | -2         |     2.1 ns (476 MHz) |
-| Xilinx Virtex UltraScale  | xcvu065-ffvc1517-3-e | -3         |     2.0 ns (500 MHz) |
-| Xilinx Kintex UltraScale+ | xcku3p-ffva676-2-e   | -2         |     1.4 ns (714 MHz) |
-| Xilinx Kintex UltraScale+ | xcku3p-ffva676-3-e   | -3         |     1.3 ns (769 MHz) |
-| Xilinx Virtex UltraScale+ | xcvu3p-ffvc1517-2-e  | -2         |     1.5 ns (666 MHz) |
-| Xilinx Virtex UltraScale+ | xcvu3p-ffvc1517-3-e  | -3         |     1.4 ns (714 MHz) |
-
-#### Utilization on Xilinx 7-Series FPGAs
-
-The following table lists the resource utilization in area-optimized synthesis
-for the following three cores:
-
-- **PicoRV32 (small):** The `picorv32` module without counter instructions,
-  without two-stage shifts, with externally latched `mem_rdata`, and without
-  catching of misaligned memory accesses and illegal instructions.
-
-- **PicoRV32 (regular):** The `picorv32` module in its default configuration.
-
-- **PicoRV32 (large):** The `picorv32` module with enabled PCPI, IRQ, MUL,
-  DIV, BARREL_SHIFTER, and COMPRESSED_ISA features.
-
-See `make area` in [scripts/vivado/](scripts/vivado/).
-
-| Core Variant       | Slice LUTs | LUTs as Memory | Slice Registers |
-|:------------------ | ----------:| --------------:| ---------------:|
-| PicoRV32 (small)   |        761 |             48 |             442 |
-| PicoRV32 (regular) |        917 |             48 |             583 |
-| PicoRV32 (large)   |       2019 |             88 |            1085 |
-
+In any case be sure to set the correct `TOOLCHAIN_PREFIX` in the `Makefile`. It can also include the
+full path to the compiler if it's not on system PATH.
