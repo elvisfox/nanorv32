@@ -764,7 +764,7 @@ module nanorv32 #(
 	reg instr_lb, instr_lh, instr_lw, instr_lbu, instr_lhu, instr_sb, instr_sh, instr_sw;
 	reg instr_addi, instr_slti, instr_sltiu, instr_xori, instr_ori, instr_andi, instr_slli, instr_srli, instr_srai;
 	reg instr_add, instr_sub, instr_sll, instr_slt, instr_sltu, instr_xor, instr_srl, instr_sra, instr_or, instr_and;
-	reg instr_rdcycle, instr_rdcycleh, instr_rdinstr, instr_rdinstrh, instr_ecall_ebreak;
+	reg instr_rdcycle, instr_rdcycleh, instr_rdinstr, instr_rdinstrh, instr_ecall, instr_ebreak;
 	reg instr_timer;
 	reg instr_mret, instr_wfi;
 	reg instr_csrrw, instr_csrrs, instr_csrrc;
@@ -1209,8 +1209,9 @@ module nanorv32 #(
 			instr_rdinstr  <=  (mem_rdata_q[6:0] == 7'b1110011 && mem_rdata_q[31:12] == 'b11000000001000000010) && ENABLE_COUNTERS;
 			instr_rdinstrh <=  (mem_rdata_q[6:0] == 7'b1110011 && mem_rdata_q[31:12] == 'b11001000001000000010) && ENABLE_COUNTERS && ENABLE_COUNTERS64;
 
-			instr_ecall_ebreak <= ((mem_rdata_q[6:0] == 7'b1110011 && !mem_rdata_q[31:21] && !mem_rdata_q[19:7]) ||
-					(COMPRESSED_ISA && mem_rdata_q[15:0] == 16'h9002));
+			instr_ecall <= mem_rdata_q[6:0] == 7'b1110011 && !mem_rdata_q[31:21] && mem_rdata_q[20] == 1'b0 && !mem_rdata_q[19:7];
+			instr_ebreak <= (mem_rdata_q[6:0] == 7'b1110011 && !mem_rdata_q[31:21] && mem_rdata_q[20] == 1'b1 && !mem_rdata_q[19:7]) ||
+					(COMPRESSED_ISA && mem_rdata_q[15:0] == 16'h9002);
 
 			instr_timer   <= mem_rdata_q[6:0] == 7'b0001011 && mem_rdata_q[31:25] == 7'b0000101 && MACHINE_ISA && ENABLE_IRQ_TIMER;
 
@@ -1596,6 +1597,21 @@ module nanorv32 #(
 		end
 	endtask
 
+	task do_instr_trap;
+		begin
+			`debug($display("EBREAK OR UNSUPPORTED INSN AT 0x%08x", reg_pc);)
+			case({instr_ecall, instr_ebreak})
+				2'b00: do_trap(4'd2, reg_pc);		// illegal instruction
+				2'b01: do_trap(4'd3, reg_pc);		// breakpoint exception
+				2'b10: do_trap(4'd11, reg_pc);		// environment call
+				2'b11: begin
+					do_trap(4'hx, reg_pc);		// should never happen
+					`assert(0)
+				end
+			endcase
+		end
+	endtask
+
 	always @(posedge clk) begin
 		trap <= 0;
 		reg_sh <= 'bx;
@@ -1824,19 +1840,18 @@ module nanorv32 #(
 									latched_store <= pcpi_int_wr;
 									cpu_state <= cpu_state_fetch;
 								end else
-								if (CATCH_ILLINSN && (pcpi_timeout || instr_ecall_ebreak)) begin
+								if (CATCH_ILLINSN && (pcpi_timeout || instr_ecall || instr_ebreak)) begin
 									pcpi_valid <= 0;
-									`debug($display("EBREAK OR UNSUPPORTED INSN AT 0x%08x", reg_pc);)
 									mem_do_rinst <= mem_do_prefetch && !mem_done;	// complete previous prefetch first
 									decoder_trigger <= 1'b0;
-									do_trap(4'd2, reg_pc);							// illegal instruction
+									do_instr_trap;
 								end
 							end else begin
 								cpu_state <= cpu_state_ld_rs2;
 							end
-						end else begin
-							`debug($display("EBREAK OR UNSUPPORTED INSN AT 0x%08x", reg_pc);)
-							do_trap(4'd2, reg_pc);		// illegal instruction
+						end
+						else begin
+							do_instr_trap;
 						end
 					end
 					ENABLE_COUNTERS && is_rdcycle_rdcycleh_rdinstr_rdinstrh: begin
@@ -2052,11 +2067,10 @@ module nanorv32 #(
 							reg_out <= pcpi_int_rd;
 							latched_store <= pcpi_int_wr;
 							cpu_state <= cpu_state_fetch;
-						end else
-						if (CATCH_ILLINSN && (pcpi_timeout || instr_ecall_ebreak)) begin
+						end
+						else if(CATCH_ILLINSN && (pcpi_timeout || instr_ecall || instr_ebreak)) begin
 							pcpi_valid <= 0;
-							`debug($display("EBREAK OR UNSUPPORTED INSN AT 0x%08x", reg_pc);)
-							do_trap(4'd2, reg_pc);		// illegal instruction
+							do_instr_trap;
 						end
 					end
 					is_sb_sh_sw: begin
@@ -2245,7 +2259,7 @@ module nanorv32 #(
 			mip[M_IRQ_SOFTWARE] <= 1'b0;
 
 		// FIXME: this has never been verified, it might not work
-		if (!CATCH_ILLINSN && decoder_trigger_q && !decoder_pseudo_trigger_q && instr_ecall_ebreak) begin
+		if (!CATCH_ILLINSN && decoder_trigger_q && !decoder_pseudo_trigger_q && (instr_ecall || instr_ebreak)) begin
 			cpu_state <= cpu_state_trap;
 		end
 
@@ -2261,15 +2275,15 @@ module nanorv32 #(
 			mtrap_prev <= 1'b0;
 		end
 
-		if (!CATCH_MISALIGN) begin
-			if (COMPRESSED_ISA) begin
-				reg_pc[0] <= 0;
-				reg_next_pc[0] <= 0;
-			end else begin
-				reg_pc[1:0] <= 0;
-				reg_next_pc[1:0] <= 0;
-			end
+		// if (!CATCH_MISALIGN) begin
+		if (COMPRESSED_ISA) begin
+			reg_pc[0] <= 0;
+			reg_next_pc[0] <= 0;
+		end else begin
+			reg_pc[1:0] <= 0;
+			reg_next_pc[1:0] <= 0;
 		end
+		// end
 		current_pc = 'bx;
 	end
 
