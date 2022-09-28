@@ -9,6 +9,7 @@
 
 `ifndef VERILATOR
 module testbench #(
+	parameter AXI_TEST = 0,
 	parameter VERBOSE = 0
 );
 	reg clk = 1;
@@ -66,6 +67,33 @@ module testbench #(
 	// uut instance
 	wire tests_passed;
 
+`ifdef TESTBENCH_AXI
+	nanorv32_wrapper_axi #(
+		.AXI_TEST (AXI_TEST),
+		.VERBOSE  (VERBOSE)
+	) top (
+		.clk(clk),
+		.resetn(resetn),
+		.irq(irq),
+		.trap(trap),
+		.trace_valid(trace_valid),
+		.trace_data(trace_data),
+		.tests_passed(tests_passed)
+	);
+`else
+`ifdef TESTBENCH_WB
+	nanorv32_wrapper_wb #(
+		.VERBOSE (VERBOSE)
+	) top (
+		.wb_clk(clk),
+		.wb_rst(~resetn),
+		.irq(irq),
+		.trap(trap),
+		.trace_valid(trace_valid),
+		.trace_data(trace_data),
+		.tests_passed(tests_passed)
+	);
+`else
 	nanorv32_wrapper #(
 		.VERBOSE  (VERBOSE)
 	) top (
@@ -77,6 +105,8 @@ module testbench #(
 		.trace_data(trace_data),
 		.tests_passed(tests_passed)
 	);
+`endif
+`endif
 
 	// Cycle counter
 	integer cycle_counter;

@@ -11,22 +11,13 @@ module nanorv32_wrapper_wb #(
 ) (
 	input wb_clk,
 	input wb_rst,
+	input [31:0] irq,
 	output trap,
 	output trace_valid,
-	output [35:0] trace_data
+	output [35:0] trace_data,
+	output tests_passed
 );
-	wire tests_passed;
-	reg [31:0] irq = 0;
 	wire mem_instr;
-
-	reg [15:0] count_cycle = 0;
-	always @(posedge wb_clk) count_cycle <= !wb_rst ? count_cycle + 1 : 0;
-
-	always @* begin
-		irq = 0;
-		irq[4] = &count_cycle[12:0];
-		irq[5] = &count_cycle[15:0];
-	end
 
 	wire [31:0] wb_m2s_adr;
 	wire [31:0] wb_m2s_dat;
@@ -67,7 +58,7 @@ module nanorv32_wrapper_wb #(
 `endif
 		.ENABLE_MUL(1),
 		.ENABLE_DIV(1),
-		.ENABLE_IRQ(1),		// FIXME
+		.MACHINE_ISA(1),
 		.ENABLE_TRACE(1)
 `endif
 	) uut (
@@ -95,25 +86,5 @@ module nanorv32_wrapper_wb #(
 		if (!$value$plusargs("firmware=%s", firmware_file))
 			firmware_file = "firmware/firmware.hex";
 		$readmemh(firmware_file, ram.mem);
-	end
-
-	integer cycle_counter;
-	always @(posedge wb_clk) begin
-		cycle_counter <= !wb_rst ? cycle_counter + 1 : 0;
-		if (!wb_rst && trap) begin
-`ifndef VERILATOR
-			repeat (10) @(posedge wb_clk);
-`endif
-			$display("TRAP after %1d clock cycles", cycle_counter);
-			if (tests_passed) begin
-				$display("ALL TESTS PASSED.");
-				$finish;
-			end else begin
-				$display("ERROR!");
-				if ($test$plusargs("noerror"))
-					$finish;
-				$stop;
-			end
-		end
 	end
 endmodule
