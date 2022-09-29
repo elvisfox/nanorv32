@@ -5,12 +5,7 @@ if {[file exists rtl_work]} {
 vlib rtl_work
 vmap work rtl_work
 
-
-vlog -vlog01compat -work work {../../rtl/picorv32_pcpi_mul.v}
-# vlog -vlog01compat -work work {../../rtl/picorv32_pcpi_fast_mul.v}
-vlog -vlog01compat -work work {../../rtl/picorv32_pcpi_div.v}
-# vlog -vlog01compat -work work +define+DEBUGASM +define+DEBUG +define+FORMAL {../../rtl/nanorv32.v}
-vlog -vlog01compat -work work +define+FORMAL {../../rtl/nanorv32.v}
+do nanorv32_rtl.do
 
 vlog -vlog01compat -work work +define+COMPRESSED_ISA {nanorv32_wrapper.v}
 vlog -vlog01compat -work work {testbench.v}
