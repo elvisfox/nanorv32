@@ -92,7 +92,6 @@ module nanorv32_core #(
 	parameter [ 0:0] ENABLE_CSR_MTVAL = 1,
 	parameter [ 0:0] ENABLE_CSR_CUSTOM_TRAP = 1,
 	parameter [ 0:0] ENABLE_IRQ_EXTERNAL = 1,
-	parameter [ 0:0] ENABLE_IRQ_TIMER = 1,
 	parameter [ 0:0] ENABLE_IRQ_SOFTWARE = 1,
 	parameter [ 0:0] ENABLE_TRACE = 0,
 	parameter [ 0:0] REGS_INIT_ZERO = 0,
@@ -132,6 +131,7 @@ module nanorv32_core #(
 	input             pcpi_ready,
 
 	// IRQ Interface
+	input             mtip,
 	input      [31:0] irq,
 	output reg [31:0] eoi,
 
@@ -246,7 +246,6 @@ module nanorv32_core #(
 	// reg irq_active;
 	reg [31:0] irq_mask;
 	reg [31:0] irq_pending;
-	reg [31:0] timer;
 
 `ifndef PICORV32_REGS
 	reg [31:0] cpuregs [0:regfile_size-1];
@@ -765,7 +764,6 @@ module nanorv32_core #(
 	reg instr_addi, instr_slti, instr_sltiu, instr_xori, instr_ori, instr_andi, instr_slli, instr_srli, instr_srai;
 	reg instr_add, instr_sub, instr_sll, instr_slt, instr_sltu, instr_xor, instr_srl, instr_sra, instr_or, instr_and;
 	reg instr_rdcycle, instr_rdcycleh, instr_rdinstr, instr_rdinstrh, instr_ecall, instr_ebreak;
-	reg instr_timer;
 	reg instr_mret, instr_wfi;
 	reg instr_csrrw, instr_csrrs, instr_csrrc;
 	reg instr_csrrwi, instr_csrrsi, instr_csrrci;
@@ -801,7 +799,7 @@ module nanorv32_core #(
 			instr_lb, instr_lh, instr_lw, instr_lbu, instr_lhu, instr_sb, instr_sh, instr_sw,
 			instr_addi, instr_slti, instr_sltiu, instr_xori, instr_ori, instr_andi, instr_slli, instr_srli, instr_srai,
 			instr_add, instr_sub, instr_sll, instr_slt, instr_sltu, instr_xor, instr_srl, instr_sra, instr_or, instr_and,
-			instr_rdcycle, instr_rdcycleh, instr_rdinstr, instr_rdinstrh, instr_timer,
+			instr_rdcycle, instr_rdcycleh, instr_rdinstr, instr_rdinstrh,
 			instr_mret, instr_wfi, instr_csrrw, instr_csrrs, instr_csrrc, instr_csrrwi, instr_csrrsi, instr_csrrci};
 
 	wire is_rdcycle_rdcycleh_rdinstr_rdinstrh;
@@ -867,8 +865,6 @@ module nanorv32_core #(
 		if (instr_rdcycleh) new_ascii_instr = "rdcycleh";
 		if (instr_rdinstr)  new_ascii_instr = "rdinstr";
 		if (instr_rdinstrh) new_ascii_instr = "rdinstrh";
-
-		if (instr_timer)    new_ascii_instr = "timer";
 
 		if (instr_mret)		new_ascii_instr = "mret";
 		if (instr_wfi)		new_ascii_instr = "wfi";
@@ -1212,8 +1208,6 @@ module nanorv32_core #(
 			instr_ecall <= mem_rdata_q[6:0] == 7'b1110011 && !mem_rdata_q[31:21] && mem_rdata_q[20] == 1'b0 && !mem_rdata_q[19:7];
 			instr_ebreak <= (mem_rdata_q[6:0] == 7'b1110011 && !mem_rdata_q[31:21] && mem_rdata_q[20] == 1'b1 && !mem_rdata_q[19:7]) ||
 					(COMPRESSED_ISA && mem_rdata_q[15:0] == 16'h9002);
-
-			instr_timer   <= mem_rdata_q[6:0] == 7'b0001011 && mem_rdata_q[31:25] == 7'b0000101 && MACHINE_ISA && ENABLE_IRQ_TIMER;
 
 			instr_csrrw		<= mem_rdata_q[6:0] == 7'b1110011 && mem_rdata_q[14:12] == 3'b001 && MACHINE_ISA;
 			instr_csrrs		<= mem_rdata_q[6:0] == 7'b1110011 && mem_rdata_q[14:12] == 3'b010 && MACHINE_ISA;
@@ -1652,10 +1646,6 @@ module nanorv32_core #(
 		next_irq_pending = MACHINE_ISA ? irq_pending & LATCHED_IRQ : 'bx;
 		eoi <= 0;
 
-		if (MACHINE_ISA && ENABLE_IRQ_TIMER && timer) begin
-			timer <= timer - 1;
-		end
-
 		decoder_trigger <= mem_do_rinst && mem_done;
 		decoder_trigger_q <= decoder_trigger;
 		decoder_pseudo_trigger <= 0;
@@ -1697,7 +1687,6 @@ module nanorv32_core #(
 			// irq_delay <= 0;
 			irq_mask <= 0;
 			next_irq_pending = 0;
-			timer <= 0;
 			if (~STACKADDR) begin
 				latched_store <= 1;
 				latched_rd <= 2;
@@ -1978,15 +1967,6 @@ module nanorv32_core #(
 						// back to fetch state
 						cpu_state <= cpu_state_fetch;
 					end
-					MACHINE_ISA && ENABLE_IRQ_TIMER && instr_timer: begin
-						latched_store <= 1;
-						reg_out <= timer;
-						`debug($display("LD_RS1: %2d 0x%08x", decoded_rs1, cpuregs_rs1);)
-						timer <= cpuregs_rs1;
-						dbg_rs1val <= cpuregs_rs1;
-						dbg_rs1val_valid <= 1;
-						cpu_state <= cpu_state_fetch;
-					end
 					is_lb_lh_lw_lbu_lhu && !instr_trap: begin
 						`debug($display("LD_RS1: %2d 0x%08x", decoded_rs1, cpuregs_rs1);)
 						reg_op1 <= cpuregs_rs1;
@@ -2247,12 +2227,7 @@ module nanorv32_core #(
 			mip[M_IRQ_EXTERNAL] <= 1'b0;
 		
 		// Timer interrupt pending bit
-		if(MACHINE_ISA && ENABLE_IRQ_TIMER) begin
-			if (timer - 1 == 0)
-				mip[M_IRQ_TIMER] <= 1'b1;
-		end
-		else
-			mip[M_IRQ_TIMER] <= 1'b0;
+		mip[M_IRQ_TIMER] <= mtip & MACHINE_ISA;
 
 		// Software interrupt pending bit
 		if(!MACHINE_ISA || !ENABLE_IRQ_SOFTWARE)

@@ -27,7 +27,7 @@ module nanorv32 #(
 	parameter [ 0:0] ENABLE_REGS_16_31 = 1,
 	parameter [ 0:0] ENABLE_REGS_DUALPORT = 1,
 	// parameter [ 0:0] LATCHED_MEM_RDATA = 0,
-	parameter [ 0:0] USE_LA_MEM_INTERFACE = 1,
+	parameter [ 0:0] USE_LA_MEM_INTERFACE = 0,
 	parameter [ 0:0] TWO_STAGE_SHIFT = 1,
 	parameter [ 0:0] BARREL_SHIFTER = 0,
 	parameter [ 0:0] TWO_CYCLE_COMPARE = 0,
@@ -44,10 +44,11 @@ module nanorv32 #(
 	parameter [ 0:0] ENABLE_CSR_MTVAL = 1,
 	parameter [ 0:0] ENABLE_CSR_CUSTOM_TRAP = 1,
 	parameter [ 0:0] ENABLE_IRQ_EXTERNAL = 1,
-	parameter [ 0:0] ENABLE_IRQ_TIMER = 1,
 	parameter [ 0:0] ENABLE_IRQ_SOFTWARE = 1,
+	parameter [ 0:0] ENABLE_MTIME = 1,
 	parameter [ 0:0] ENABLE_TRACE = 0,
 	parameter [ 0:0] REGS_INIT_ZERO = 0,
+	parameter [31:4] MTIME_BASE_ADDR = 28'hffff_fff,
 	parameter [31:0] MASKED_IRQ = 32'h 0000_0000,
 	parameter [31:0] LATCHED_IRQ = 32'h ffff_ffff,
 	parameter [31:0] PROGADDR_RESET = 32'h 0000_0000,
@@ -135,6 +136,8 @@ module nanorv32 #(
 	reg								core_mem_ready;
 	reg		[31:0]					core_mem_rdata;
 
+	wire							mtip;		// timer interrupt pending bit
+
 	nanorv32_core #(
 		.ENABLE_COUNTERS			(ENABLE_COUNTERS),
 		.ENABLE_COUNTERS64			(ENABLE_COUNTERS64),
@@ -157,7 +160,6 @@ module nanorv32 #(
 		.ENABLE_CSR_MTVAL			(ENABLE_CSR_MTVAL),
 		.ENABLE_CSR_CUSTOM_TRAP		(ENABLE_CSR_CUSTOM_TRAP),
 		.ENABLE_IRQ_EXTERNAL		(ENABLE_IRQ_EXTERNAL),
-		.ENABLE_IRQ_TIMER			(ENABLE_IRQ_TIMER),
 		.ENABLE_IRQ_SOFTWARE		(ENABLE_IRQ_SOFTWARE),
 		.ENABLE_TRACE				(ENABLE_TRACE),
 		.REGS_INIT_ZERO				(REGS_INIT_ZERO),
@@ -198,6 +200,7 @@ module nanorv32 #(
 		.pcpi_ready					(pcpi_ready),
 
 		// IRQ Interface
+		.mtip						(mtip),
 		.irq						(irq),
 		.eoi						(eoi),
 
@@ -257,11 +260,50 @@ module nanorv32 #(
 		end
 	end
 
+	// Timer (provides mtime, mtimecmp accessible through I/O space)
+	reg		[1:0]					timer_io_mtime_valid;
+	reg		[1:0]					timer_io_mtimecmp_valid;
+	wire							timer_io_ready;
+	wire	[31:0]					tiemr_io_rdata;
+
+	generate
+		if(ENABLE_MTIME)
+			nanorv32_timer timer(
+				// clock and reset
+				.resetn				(resetn),
+				.clk				(clk),
+
+				// I/O access
+				.io_mtime_valid		(timer_io_mtime_valid),
+				.io_mtimecmp_valid	(timer_io_mtimecmp_valid),
+				.io_ready			(timer_io_ready),
+				.io_wdata			(mem_wdata),
+				.io_wstrb			(mem_wstrb),
+				.io_rdata			(tiemr_io_rdata),
+
+				// interrupt request
+				.mtip				(mtip)
+			);
+	endgenerate
+
 	// Address decoder
 	always @* begin
 		mem_valid = 1'b0;
+		timer_io_mtime_valid = 2'b00;
+		timer_io_mtimecmp_valid = 2'b00;
 
-		casez(mem_addr)
+		casez({ENABLE_MTIME, mem_addr})
+			{1'b1, MTIME_BASE_ADDR, 4'b????}: begin
+				case(mem_addr[3:2])
+					2'b00:	timer_io_mtime_valid[0] = 1'b1;
+					2'b01:	timer_io_mtime_valid[1] = 1'b1;
+					2'b10:	timer_io_mtimecmp_valid[0] = 1'b1;
+					2'b11:	timer_io_mtimecmp_valid[1] = 1'b1;
+				endcase
+				core_mem_ready = timer_io_ready;
+				core_mem_rdata = tiemr_io_rdata;
+			end
+
 			default: begin
 				mem_valid = core_mem_valid;
 				core_mem_ready = mem_ready;
