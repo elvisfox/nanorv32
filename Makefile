@@ -17,6 +17,18 @@ TEST_FW_OBJS = \
 	bin/test/sieve.o \
 	bin/test/multest.o \
 	bin/test/stats.o
+FREERTOS_DEMO_FW_OBJS = \
+	bin/freertos_demo/start.o \
+	bin/freertos_demo/FreeRTOS-Kernel/portable/GCC/RISC-V/portASM.o \
+	bin/freertos_demo/FreeRTOS-Kernel/portable/GCC/RISC-V/port.o \
+	bin/freertos_demo/FreeRTOS-Kernel/portable/MemMang/heap_4.o \
+	bin/freertos_demo/FreeRTOS-Kernel/tasks.o \
+	bin/freertos_demo/FreeRTOS-Kernel/queue.o \
+	bin/freertos_demo/FreeRTOS-Kernel/list.o \
+	bin/freertos_demo/FreeRTOS-Kernel/timers.o \
+	bin/freertos_demo/main.o \
+	bin/freertos_demo/main_blinky.o \
+	bin/freertos_demo/print.o
 NANORV32_RTL = \
 	rtl/nanorv32.v \
 	rtl/nanorv32_core.v \
@@ -79,7 +91,8 @@ tb/test/testbench_wb.vvp: $(NANORV32_RTL) tb/test/testbench.v tb/test/nanorv32_w
 # 	$(IVERILOG) -o $@ -D RISCV_FORMAL $(subst C,-DCOMPRESSED_ISA,$(COMPRESSED_ISA)) $^
 # 	chmod -x $@
 
-fw: bin/test/firmware.memh bin/test/firmware.lss
+fw/test: bin/test/firmware.memh bin/test/firmware.lss
+fw/freertos_demo: bin/freertos_demo/firmware.memh bin/freertos_demo/firmware.lss
 
 %.memh: %.bin utils/makehex.py
 	$(PYTHON) utils/makehex.py $< 32768 > $@
@@ -97,13 +110,23 @@ bin/test/firmware.elf: $(TEST_FW_OBJS) $(TEST_OBJS) fw/test/sections.lds
 		$(TEST_FW_OBJS) $(TEST_OBJS) -lgcc
 	chmod -x $@
 
-bin/test/start.o: fw/test/start.S
+bin/freertos_demo/firmware.elf: $(FREERTOS_DEMO_FW_OBJS) fw/freertos_demo/sections.lds
+	$(TOOLCHAIN_PREFIX)gcc -Os -mabi=ilp32 -march=rv32im$(subst C,c,$(COMPRESSED_ISA)) -ffreestanding -nostdlib -o $@ \
+		-Wl,--build-id=none,-Bstatic,-T,fw/freertos_demo/sections.lds,-Map,$(dir $@)firmware.map,--strip-debug \
+		$(FREERTOS_DEMO_FW_OBJS) -lgcc -lc
+	chmod -x $@
+
+bin/%.o: fw/%.S
 	$(MKDIR) $(dir $@)
-	$(TOOLCHAIN_PREFIX)gcc -c -mabi=ilp32 -march=rv32im$(subst C,c,$(COMPRESSED_ISA)) -o $@ $<
+	$(TOOLCHAIN_PREFIX)gcc -c -mabi=ilp32 -march=rv32im$(subst C,c,$(COMPRESSED_ISA)) -o $@ $< \
+		-Ifw/freertos_demo
 
 bin/%.o: fw/%.c
 	$(MKDIR) $(dir $@)
-	$(TOOLCHAIN_PREFIX)gcc -c -mabi=ilp32 -march=rv32i$(subst C,c,$(COMPRESSED_ISA)) -Os --std=c99 $(GCC_WARNS) -ffreestanding -nostdlib -o $@ $<
+	$(TOOLCHAIN_PREFIX)gcc -c -mabi=ilp32 -march=rv32i$(subst C,c,$(COMPRESSED_ISA)) -o $@ $< \
+		-Os --std=c99 $(GCC_WARNS) -ffreestanding -nostdlib \
+		-Ifw/freertos_demo/FreeRTOS-Kernel/include -Ifw/freertos_demo \
+		-Ifw/freertos_demo/FreeRTOS-Kernel/portable/GCC/RISC-V
 
 bin/test/tests/%.o: fw/test/tests/%.S fw/test/tests/riscv_test.h fw/test/tests/test_macros.h
 	$(MKDIR) $(dir $@)
@@ -125,9 +148,10 @@ clean:
 		tb/test/testbench_axi.trace \
 		tb/test/testbench_wb.trace \
 		tb/test/vsim.wlf \
+		tb/test/wlft* \
 		tb/test/modelsim.ini \
 		tb/test/rtl_work
-	rm -vrf $(FIRMWARE_OBJS) $(TEST_OBJS)
+	rm -vrf $(FIRMWARE_OBJS) $(TEST_OBJS) $(FREERTOS_DEMO_FW_OBJS)
 	rm -vrf bin
 
-.PHONY: test test_vcd test_axi test_axi_vcd test_wb test_wb_vcd fw clean
+.PHONY: test test_vcd test_axi test_axi_vcd test_wb test_wb_vcd fw/test fw/freertos_demo clean
