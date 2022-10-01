@@ -21,7 +21,14 @@
 // will save the rest if necessary. I.e. skip x3, x4, x8, x9, and x18-x27.
 #undef ENABLE_FASTIRQ
 
-#include "custom_ops.S"
+// CSRs
+#define csr_custom_irq_mask		0x7C0
+#define csr_custom_irq_pend		0x7C1
+#define csr_custom_trap			0x7C2
+
+#define MTIME_BASE_ADDR			0xfffffff0
+
+// #include "custom_ops.S"
 
 	.section .text
 	.global irq
@@ -39,6 +46,7 @@
 	.global hard_remu
 	.global stats
 	.global clear_bits_mip
+	.global clear_bits_mie
 	.global clear_bits_custom_irq_pend
 
 reset_vec:
@@ -52,9 +60,6 @@ reset_vec:
 .balign 16
 irq_vec:
 	/* save registers */
-
-	# picorv32_setq_insn(q2, x1)
-	# picorv32_setq_insn(q3, x2)
 
 #ifdef ENABLE_CSR_MSCRATCH
 	// Store ra in mscratch
@@ -71,17 +76,6 @@ irq_vec:
 
 	// Store sp
 	sw sp, 0*4(x1)
-
-	# picorv32_getq_insn(x2, q0)
-	# sw x2,   0*4(x1)
-
-	# picorv32_getq_insn(x2, q2)
-	# sw x2,   1*4(x1)
-
-	# picorv32_getq_insn(x2, q3)
-	# sw x2,   2*4(x1)
-
-	
 
 #ifdef ENABLE_FASTIRQ
 	sw x5,   5*4(x1)
@@ -175,46 +169,27 @@ not_compressed:
 	csrw mepc, x1
 
 	// Proceed to recalling registers
-	lui x1, %hi(irq_regs)
-	addi x1, x1, %lo(irq_regs)
 	j irq_vec_end
 
 not_a_trap:
 	// It's a normal IRQ
 
-	// arg0 = address of regs
-	lui a0, %hi(irq_regs)
-	addi a0, a0, %lo(irq_regs)
+	// arg0 = mip & mie
+	csrr a0, mip
+	csrr ra, mie
+	and a0, a0, ra
 
-	// arg1 = interrupt type
-/* #ifdef ENABLE_QREGS
-	picorv32_getq_insn(a1, q1)
- #else
-	addi a1, tp, 0
-#endif*/
-
-	// arg1 = mip
-	csrr a1, mip
-
-	// arg2 = custom_csr_irq_pend
-	csrr a2, csr_custom_irq_pend
+	// arg1 = custom_csr_irq_pend
+	csrr a1, csr_custom_irq_pend
 
 	// call to C function
 	jal ra, irq
 
 	/* restore registers */
 
-	// new irq_regs address returned from C code in a0
-	addi x1, a0, 0
-
-	# lw x2,   0*4(x1)
-	# picorv32_setq_insn(q0, x2)
-
-	# lw x2,   1*4(x1)
-	# picorv32_setq_insn(q1, x2)
 irq_vec_end:
-	# lw x2,   2*4(x1)
-	# picorv32_setq_insn(q2, x2)
+	lui x1, %hi(irq_regs)
+	addi x1, x1, %lo(irq_regs)
 
 #ifdef ENABLE_FASTIRQ
 	lw x5,   5*4(x1)
@@ -276,9 +251,6 @@ irq_vec_end:
 	addi sp, sp, 4
 #endif
 
-	# picorv32_getq_insn(x1, q1)
-	# picorv32_getq_insn(x2, q2)
-
 	mret
 
 # #ifndef ENABLE_QREGS
@@ -298,8 +270,47 @@ clear_bits_mip:
 	csrc mip, a0
 	ret
 
+clear_bits_mie:
+	csrc mie, a0
+	ret
+
 clear_bits_custom_irq_pend:
 	csrc csr_custom_irq_pend, a0
+	ret
+
+setup_timer:
+	// a0 contains number of clocks
+
+	// Disable timer interrupt
+	addi t0, zero, 0x80
+	csrc mie, t0
+
+	// Prepare MTIME_BASE_ADDR in t2
+	lui t2, %hi(MTIME_BASE_ADDR)
+	addi t2, t2, %lo(MTIME_BASE_ADDR)
+	
+	// read mtime into t1:t0
+atomic_read_mtime:
+	lw t1, 4(t2)
+	lw t0, 0(t2)
+	lw t3, 4(t2)
+	bne t1, t3, atomic_read_mtime
+
+	// Calculate mtimecmp = t1:t0 + a0
+	add t0, t0, a0
+	sltu t3, t0, a0
+	add t1, t1, t3
+
+	// Store mtimecmp
+	li t3, -1
+	sw t3, 8(t2) # No smaller than old value.
+	sw t1, 12(t2) # No smaller than new value.
+	sw t0, 8(t2) # New value.
+
+	// Reenable timer interrupt
+	addi t0, zero, 0x80
+	csrs mie, t0
+
 	ret
 
 
@@ -307,26 +318,17 @@ clear_bits_custom_irq_pend:
  **********************************/
 
 start:
-	// Enable external and timer interrupts
-	lui x1, %hi(0x880)
-	addi x1, x1, %lo(0x880)
+	// Enable external interrupt
+	lui x1, %hi(0x800)
+	addi x1, x1, %lo(0x800)
 	csrw mie, x1
 
 	// Enable all external interrupts
 	addi x1, zero, -1		// x1 = 0xffff_ffff
 	csrw csr_custom_irq_mask, x1
 
-	// Test instruction misalignment detection
-# 	lui x1, %hi(misaligned_jump)
-# 	addi x1, x1, %lo(misaligned_jump)
-# 	addi x1, x1, 1
-# 	jr x1
-
-# misaligned_jump:
 	// wait irq
 	wfi
-	# picorv32_waitirq_insn(zero)
-	# picorv32_maskirq_insn(zero, zero)
 
 	// global enable IRQ handling
 	csrwi mstatus, 8		// mie = 1
@@ -377,8 +379,8 @@ start:
 #ifdef ENABLE_RVTST
 #  define TEST(n) \
 	.global n; \
-	addi x1, zero, 1000; \
-	picorv32_timer_insn(zero, x1); \
+	addi a0, zero, 1000; \
+	jal ra, setup_timer; \
 	jal zero,n; \
 	.global n ## _ret; \
 	n ## _ret:

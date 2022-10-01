@@ -11,7 +11,6 @@ MKDIR = @"mkdir" -pv
 TEST_OBJS = $(addprefix bin/test/tests/,$(addsuffix .o,$(basename $(notdir $(wildcard fw/test/tests/*.S)))))
 TEST_FW_OBJS = \
 	bin/test/start.o \
-	bin/test/irq.o \
 	bin/test/trap.o \
 	bin/test/print.o \
 	bin/test/hello.o \
@@ -21,6 +20,7 @@ TEST_FW_OBJS = \
 NANORV32_RTL = \
 	rtl/nanorv32.v \
 	rtl/nanorv32_core.v \
+	rtl/nanorv32_timer.v \
 	rtl/picorv32_pcpi_mul.v \
 	rtl/picorv32_pcpi_div.v
 GCC_WARNS  = -Wall -Wextra -Wshadow -Wundef -Wpointer-arith -Wcast-qual -Wcast-align -Wwrite-strings

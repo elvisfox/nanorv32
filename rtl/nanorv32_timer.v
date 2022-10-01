@@ -65,8 +65,8 @@ module nanorv32_timer(
 	wire signed	[32:0]				cmp_sub[1:0];
 	reg			[1:0]				cmp;
 
-	assign		cmp_sub[1]			= cnt[1] - cmp[1];	// subtraction forces synthesiser to use carry chain
-	assign		cmp_sub[0]			= cnt[0] - cmp[0];
+	assign		cmp_sub[1]			= cnt[1] - cmp_val[1];	// subtraction forces synthesiser to use carry chain
+	assign		cmp_sub[0]			= cnt[0] - cmp_val[0];
 
 	always @(posedge clk) begin
 		if(~resetn)
