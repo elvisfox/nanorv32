@@ -5,3 +5,4 @@
 /tb/**/*.vvp
 /tb/**/*.vcd
 /tb/**/*.trace
+/tb/**/wlft*
