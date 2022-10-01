@@ -18,10 +18,11 @@
 
 // start.S
 extern void clear_bits_mip(uint32_t val);
+extern void clear_bits_mie(uint32_t val);
 extern void clear_bits_custom_irq_pend(uint32_t val);
 
 // irq.c
-uint32_t *irq(uint32_t *regs, uint32_t mip, uint32_t irqs);
+void irq(uint32_t mip, uint32_t irqs);
 bool trap(void (*mepc)(void), uint32_t mcause, void *mtval);
 
 // print.c

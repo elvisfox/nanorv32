@@ -11,13 +11,18 @@ MKDIR = @"mkdir" -pv
 TEST_OBJS = $(addprefix bin/test/tests/,$(addsuffix .o,$(basename $(notdir $(wildcard fw/test/tests/*.S)))))
 TEST_FW_OBJS = \
 	bin/test/start.o \
-	bin/test/irq.o \
 	bin/test/trap.o \
 	bin/test/print.o \
 	bin/test/hello.o \
 	bin/test/sieve.o \
 	bin/test/multest.o \
 	bin/test/stats.o
+NANORV32_RTL = \
+	rtl/nanorv32.v \
+	rtl/nanorv32_core.v \
+	rtl/nanorv32_timer.v \
+	rtl/picorv32_pcpi_mul.v \
+	rtl/picorv32_pcpi_div.v
 GCC_WARNS  = -Wall -Wextra -Wshadow -Wundef -Wpointer-arith -Wcast-qual -Wcast-align -Wwrite-strings
 GCC_WARNS += -Wredundant-decls -Wstrict-prototypes -Wmissing-prototypes -pedantic # -Wconversion
 TOOLCHAIN_PREFIX = riscv64-unknown-elf-
@@ -56,19 +61,17 @@ test_axi_vcd: tb/test/testbench_axi.vvp bin/test/firmware.memh
 		+trace=$(patsubst %.vvp,%.trace,$<) \
 		+noerror
 
-tb/test/testbench.vvp: tb/test/testbench.v tb/test/nanorv32_wrapper.v \
-		rtl/nanorv32.v rtl/picorv32_pcpi_mul.v rtl/picorv32_pcpi_div.v
+tb/test/testbench.vvp: $(NANORV32_RTL) tb/test/testbench.v tb/test/nanorv32_wrapper.v
 	$(IVERILOG) -o $@ $(subst C,-DCOMPRESSED_ISA,$(COMPRESSED_ISA)) -DFORMAL $^
 	chmod -x $@
 
-tb/test/testbench_axi.vvp: tb/test/testbench.v tb/test/nanorv32_wrapper_axi.v tb/test/axi4_memory.v \
-		rtl/nanorv32.v rtl/picorv32_pcpi_mul.v rtl/picorv32_pcpi_div.v \
+tb/test/testbench_axi.vvp: $(NANORV32_RTL) tb/test/testbench.v tb/test/nanorv32_wrapper_axi.v tb/test/axi4_memory.v \
 		rtl/nanorv32_axi.v rtl/picorv32_axi_adapter.v
 	$(IVERILOG) -o $@ $(subst C,-DCOMPRESSED_ISA,$(COMPRESSED_ISA)) -DFORMAL -DTESTBENCH_AXI $^
 	chmod -x $@
 
-tb/test/testbench_wb.vvp: tb/test/testbench.v tb/test/nanorv32_wrapper_wb.v tb/test/wb_ram.v \
-		rtl/nanorv32.v rtl/picorv32_pcpi_mul.v rtl/picorv32_pcpi_div.v rtl/nanorv32_wb.v
+tb/test/testbench_wb.vvp: $(NANORV32_RTL) tb/test/testbench.v tb/test/nanorv32_wrapper_wb.v tb/test/wb_ram.v \
+		rtl/nanorv32_wb.v
 	$(IVERILOG) -o $@ $(subst C,-DCOMPRESSED_ISA,$(COMPRESSED_ISA)) -DFORMAL -DTESTBENCH_WB $^
 	chmod -x $@
 
