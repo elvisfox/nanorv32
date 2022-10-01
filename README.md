@@ -363,7 +363,7 @@ Has no effect if `MACHINE_ISA` is 0.
 Enables support for `mtime` CSR which is accessible through I/O space. It contains a 64-bit read-only clock counter.
 The access is not atomic, so it is up to the software to guarantee correct reading of the 64-bit value.
 
-The base address of `mtime` and `mtimecmp` is set through [`MTIME_BASE_ADDR`](#mtimebaseaddr-default-28-hfffffff).
+The base address of `mtime` and `mtimecmp` is set through [`MTIME_BASE_ADDR`](#mtime_base_addr-default--28h-ffff_fff).
 
 `mtime` can also be used without `MACHINE_ISA`, but the interrupt will not be available in this case.
 
@@ -387,7 +387,7 @@ code in order to update `mtimecmp`. Another option is to keep `MTIE` equal 0 (in
 The timer interrupt sets the bit `MTIP` in `mip` CSR. This bit is automatically cleared when `mtimecmp` is set greater
 than `mtime`. Writing `MTIP` has no effect. The timer interrupt is enabled through the bit `MTIE` in `mie` CSR.
 
-The base address of `mtime` and `mtimecmp` is set through [`MTIME_BASE_ADDR`](#mtimebaseaddr-default-28-hfffffff).
+The base address of `mtime` and `mtimecmp` is set through [`MTIME_BASE_ADDR`](#mtime_base_addr-default--28h-ffff_fff).
 
 Has no effect if `ENABLE_MTIME` is 0 or `MACHINE_ISA` is 0.
 
