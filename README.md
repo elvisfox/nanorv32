@@ -453,56 +453,38 @@ All CSRs listed below can be accessed for both reading and writing. Writing read
 If some features are disabled through Verilog module parameters, some fields may become read only 0. See
 corresponding parameters description for details.
 
-| Address | Name              | 31 |      |  0 |
-| --------| ------------------|:--:|:----:|:--:|
-| 0xF11   | `mvendorid`       |    | ro 0 |    |
-| 0xF12   | `marchid`         |    | ro 0 |    |
-| 0xF13   | `mimpid`          |    | ro 0 |    |
-| 0xF14   | `mhartid`         |    | ro 0 |    |
-| 0xF15   | `mconfigptr`      |    | ro 0 |    |
+| Address | Name              | 31 ...  0 |
+| --------| ------------------|:---------:|
+| 0xF11   | `mvendorid`       |    ro 0   |
+| 0xF12   | `marchid`         |    ro 0   |
+| 0xF13   | `mimpid`          |    ro 0   |
+| 0xF14   | `mhartid`         |    ro 0   |
+| 0xF15   | `mconfigptr`      |    ro 0   |
 
-| Address | Name              | 31 |      |  8 |   7  |  6 |      |  4 |  3  |  2 |      |  0 |
-| --------| ------------------|:--:|:----:|:--:|:----:|:--:|:----:|:--:|:---:|:--:|:----:|:--:|
-| 0x300   | `mstatus`         |    | ro 0 |    |`MPIE`|    | ro 0 |    |`MIE`|    | ro 0 |    |
+| Address | Name              | 31 ...  8 |   7  |  6 ...  4 |  3  |  2 ...  0 |
+| --------| ------------------|:---------:|:----:|:---------:|:---:|:---------:|
+| 0x300   | `mstatus`         |    ro 0   |`MPIE`|    ro 0   |`MIE`|    ro 0   |
 
-| Address | Name              | 31 |      |  0 |
-| --------| ------------------|:--:|:----:|:--:|
-| 0x301   | `misa`            |    | ro 0 |    |
-| 0x310   | `mstatush`        |    | ro 0 |    |
+| Address | Name              | 31 ...  0 |
+| --------| ------------------|:---------:|
+| 0x301   | `misa`            |    ro 0   |
+| 0x310   | `mstatush`        |    ro 0   |
 
-| Address | Name              | 31 |      | 12 |  11  | 10 |      |  8 |   7  |  6 |      |  4 |   3  |  2 |      |  0 |
-| --------| ------------------|:--:|:----:|:--:|:----:|:--:|:----:|:--:|:----:|:--:|:----:|:--:|:----:|:--:|:----:|:--:|
-| 0x304   | `mie`             |    | ro 0 |    |`MEIE`|    | ro 0 |    |`MTIE`|    | ro 0 |    |`MSIE`|    | ro 0 |    |
-| 0x344   | `mip`             |    | ro 0 |    |`MEIP`|    | ro 0 |    |`MTIP`|    | ro 0 |    |`MSIP`|    | ro 0 |    |
+| Address | Name              | 31 ... 12 |  11  | 10 ...  8 |   7  |  6 ...  4 |   3  |  2 ...  0 |
+| --------| ------------------|:---------:|:----:|:---------:|:----:|:---------:|:----:|:---------:|
+| 0x304   | `mie`             |    ro 0   |`MEIE`|    ro 0   |`MTIE`|    ro 0   |`MSIE`|    ro 0   |
+| 0x344   | `mip`             |    ro 0   |`MEIP`|    ro 0   |`MTIP`|    ro 0   |`MSIP`|    ro 0   |
 
-| Address | Name              | 31 |                                                               |  0 |
-| --------| ------------------|:--:| ------------------------------------------------------------- |:--:|
-| 0x305   | `mtvec`           |    | read only machine trap vector (contains `PROGADDR_IRQ` value) |    |
-| 0x340   | `mscratch`        |    | machine scratch register for any software purpose             |    |
-| 0x341   | `mepc`            |    | machine trap return address (used by `mret` instruction)      |    |
-| 0x343   | `mtval`           |    | machine trap value register                                   |    |
+| Address | Name              | 31 ... 0                                                      |
+| --------| ------------------| ------------------------------------------------------------- |
+| 0x305   | `mtvec`           | read only machine trap vector (contains `PROGADDR_IRQ` value) |
+| 0x340   | `mscratch`        | machine scratch register for any software purpose             |
+| 0x341   | `mepc`            | machine trap return address (used by `mret` instruction)      |
+| 0x343   | `mtval`           | machine trap value register                                   |
 
-| Address | Name              | 31          | 30 |      |  4 |  3 |                |  0 |
-| --------| ------------------|:-----------:|:--:|:----:|:--:|:--:|:--------------:|:--:|
-| 0x342   | `mcause`          | Interrupt   |    | ro 0 |    |    | Exception Code |    |
-
-| Address | Name                | 31 |                                              |  0 |
-| --------| --------------------|:--:| -------------------------------------------- |:--:|
-| 0x7C0   |`csr_custom_irq_mask`|    | external interrupt enable bits (1: enabled)  |    |
-| 0x7C1   |`csr_custom_irq_pend`|    | external interrupt pending bits (1: pending) |    |
-
-| Address | Name              | 31 |      |  2 |      1     |   0   |
-| --------| ------------------|:--:|:----:|:--:|:----------:|:-----:|
-| 0x7C2   |`csr_custom_trap`  |    | ro 0 |    |`mtrap_prev`|`mtrap`|
-
-The CSRs `mtime` and `mtimecmp` are provided through I/O space.
-The 28-bit `MTIME_BASE_ADDR` parameter is assumed to be left-justified to the 32-bit address in the table below.
-| Address                 | Name              | Description                    |
-| ------------------------| ------------------| -------------------------------|
-| `MTIME_BASE_ADDR` + 0x0 | `mtime` (LSB)     | Lower 32 bits of `mtime`       |
-| `MTIME_BASE_ADDR` + 0x4 | `mtime` (MSB)     | Upper 32 bits of `mtime`       |
-| `MTIME_BASE_ADDR` + 0x8 | `mtimecmp` (LSB)  | Lower 32 bits of `mtimecmp`    |
-| `MTIME_BASE_ADDR` + 0xC | `mtimecmp` (MSB)  | Upper 32 bits of `mtimecmp`    |
+| Address | Name              | 31          | 30 ...  4 |  3 ...  0          |
+| --------| ------------------|:-----------:|:---------:|:------------------:|
+| 0x342   | `mcause`          | Interrupt   |    ro 0   |   Exception Code   |
 
 Valid values of `mcause` CSR are listed in the table below.
 
@@ -517,6 +499,25 @@ Valid values of `mcause` CSR are listed in the table below.
 |         0 |              4 | Load address misaligned                                   |
 |         0 |              6 | Store address misaligned                                  |
 |         0 |             11 | Environment call from M-mode (`ecall`)                    |
+
+| Address | Name                | 31 ... 0                                     |
+| --------| --------------------| -------------------------------------------- |
+| 0x7C0   |`csr_custom_irq_mask`| external interrupt enable bits (1: enabled)  |
+| 0x7C1   |`csr_custom_irq_pend`| external interrupt pending bits (1: pending) |
+
+| Address | Name              | 31 ...  2 |      1     |   0   |
+| --------| ------------------|:---------:|:----------:|:-----:|
+| 0x7C2   |`csr_custom_trap`  |    ro 0   |`mtrap_prev`|`mtrap`|
+
+The CSRs `mtime` and `mtimecmp` are provided through I/O space.
+The 28-bit `MTIME_BASE_ADDR` parameter is assumed to be left-justified to the 32-bit address in the table below.
+| Address                 | Name              | Description                    |
+| ------------------------| ------------------| -------------------------------|
+| `MTIME_BASE_ADDR` + 0x0 | `mtime` (LSB)     | Lower 32 bits of `mtime`       |
+| `MTIME_BASE_ADDR` + 0x4 | `mtime` (MSB)     | Upper 32 bits of `mtime`       |
+| `MTIME_BASE_ADDR` + 0x8 | `mtimecmp` (LSB)  | Lower 32 bits of `mtimecmp`    |
+| `MTIME_BASE_ADDR` + 0xC | `mtimecmp` (MSB)  | Upper 32 bits of `mtimecmp`    |
+
 
 Cycles per Instruction Performance
 ----------------------------------
