@@ -38,6 +38,8 @@ module nanorv32_timer(
 	output wire						mtip
 );
 
+	parameter	[0:0]				ENABLE_MTIMECMP = 1;
+
 	// 64-bit counter
 	reg			[31:0]				cnt[1:0];
 	reg								inc_cnt1;
@@ -75,7 +77,7 @@ module nanorv32_timer(
 			cmp <= {cmp_sub[1][32], cmp_sub[0][32]};
 	end
 
-	assign		mtip				= ~|cmp;
+	assign		mtip				= (~|cmp) && ENABLE_MTIMECMP;
 
 	// I/O interface
 	integer i;
@@ -86,7 +88,7 @@ module nanorv32_timer(
 		end
 		else begin
 			for(i = 0; i < 2; i = i + 1) begin
-				if(io_mtimecmp_valid[i]) begin
+				if(io_mtimecmp_valid[i] && ENABLE_MTIMECMP) begin
 					if(io_wstrb[3])
 						cmp_val[i][31:24]	<= io_wdata[31:24];
 					if(io_wstrb[2])
@@ -104,8 +106,8 @@ module nanorv32_timer(
 		io_ready = |{io_mtimecmp_valid, io_mtime_valid};
 
 		case({io_mtimecmp_valid, io_mtime_valid})
-			4'b1000:	io_rdata = cmp_val[1];
-			4'b0100:	io_rdata = cmp_val[0];
+			4'b1000:	io_rdata = ENABLE_MTIMECMP ? cmp_val[1] : 32'h0000_0000;
+			4'b0100:	io_rdata = ENABLE_MTIMECMP ? cmp_val[0] : 32'h0000_0000;
 			4'b0010:	io_rdata = cnt[1];
 			4'b0001:	io_rdata = cnt[0];
 			default:	io_rdata = 32'hxxxx_xxxx;

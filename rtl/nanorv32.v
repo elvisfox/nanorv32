@@ -46,6 +46,7 @@ module nanorv32 #(
 	parameter [ 0:0] ENABLE_IRQ_EXTERNAL = 1,
 	parameter [ 0:0] ENABLE_IRQ_SOFTWARE = 1,
 	parameter [ 0:0] ENABLE_MTIME = 1,
+	parameter [ 0:0] ENABLE_MTIMECMP = 1,
 	parameter [ 0:0] ENABLE_TRACE = 0,
 	parameter [ 0:0] REGS_INIT_ZERO = 0,
 	parameter [31:4] MTIME_BASE_ADDR = 28'hffff_fff,
@@ -160,6 +161,7 @@ module nanorv32 #(
 		.ENABLE_CSR_MTVAL			(ENABLE_CSR_MTVAL),
 		.ENABLE_CSR_CUSTOM_TRAP		(ENABLE_CSR_CUSTOM_TRAP),
 		.ENABLE_IRQ_EXTERNAL		(ENABLE_IRQ_EXTERNAL),
+		.ENABLE_IRQ_TIMER			(ENABLE_MTIME && ENABLE_MTIMECMP),
 		.ENABLE_IRQ_SOFTWARE		(ENABLE_IRQ_SOFTWARE),
 		.ENABLE_TRACE				(ENABLE_TRACE),
 		.REGS_INIT_ZERO				(REGS_INIT_ZERO),
@@ -268,7 +270,9 @@ module nanorv32 #(
 
 	generate
 		if(ENABLE_MTIME)
-			nanorv32_timer timer(
+			nanorv32_timer #(
+				.ENABLE_MTIMECMP	(ENABLE_MTIMECMP && MACHINE_ISA)
+			) timer(
 				// clock and reset
 				.resetn				(resetn),
 				.clk				(clk),

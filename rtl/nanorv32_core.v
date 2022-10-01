@@ -92,6 +92,7 @@ module nanorv32_core #(
 	parameter [ 0:0] ENABLE_CSR_MTVAL = 1,
 	parameter [ 0:0] ENABLE_CSR_CUSTOM_TRAP = 1,
 	parameter [ 0:0] ENABLE_IRQ_EXTERNAL = 1,
+	parameter [ 0:0] ENABLE_IRQ_TIMER = 1,
 	parameter [ 0:0] ENABLE_IRQ_SOFTWARE = 1,
 	parameter [ 0:0] ENABLE_TRACE = 0,
 	parameter [ 0:0] REGS_INIT_ZERO = 0,
@@ -2223,15 +2224,24 @@ module nanorv32_core #(
 		// External interrupt pending bit
 		if(MACHINE_ISA && ENABLE_IRQ_EXTERNAL)
 			mip[M_IRQ_EXTERNAL] <= |(irq_pending & irq_mask);
-		else
+		else begin
 			mip[M_IRQ_EXTERNAL] <= 1'b0;
+			mie[M_IRQ_EXTERNAL] <= 1'b0;
+		end
 		
 		// Timer interrupt pending bit
-		mip[M_IRQ_TIMER] <= mtip & MACHINE_ISA;
+		if(MACHINE_ISA && ENABLE_IRQ_TIMER)
+			mip[M_IRQ_TIMER] <= mtip;
+		else begin
+			mip[M_IRQ_TIMER] <= 1'b0;
+			mie[M_IRQ_TIMER] <= 1'b0;
+		end
 
 		// Software interrupt pending bit
-		if(!MACHINE_ISA || !ENABLE_IRQ_SOFTWARE)
+		if(!MACHINE_ISA || !ENABLE_IRQ_SOFTWARE) begin
 			mip[M_IRQ_SOFTWARE] <= 1'b0;
+			mie[M_IRQ_SOFTWARE] <= 1'b0;
+		end
 
 		// FIXME: this has never been verified, it might not work
 		if (!CATCH_ILLINSN && decoder_trigger_q && !decoder_pseudo_trigger_q && (instr_ecall || instr_ebreak)) begin
