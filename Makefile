@@ -29,6 +29,7 @@ FREERTOS_DEMO_FW_OBJS = \
 	bin/freertos_demo/main.o \
 	bin/freertos_demo/main_blinky.o \
 	bin/freertos_demo/print.o
+DEPS = $(TEST_FW_OBJS:%.o=%.d) $(FREERTOS_DEMO_FW_OBJS:%.o=%.d)
 NANORV32_RTL = \
 	rtl/nanorv32.v \
 	rtl/nanorv32_core.v \
@@ -94,6 +95,9 @@ tb/test/testbench_wb.vvp: $(NANORV32_RTL) tb/test/testbench.v tb/test/nanorv32_w
 fw/test: bin/test/firmware.memh bin/test/firmware.lss
 fw/freertos_demo: bin/freertos_demo/firmware.memh bin/freertos_demo/firmware.lss
 
+# Inherit dependencies on header files
+-include $(DEPS)
+
 %.memh: %.bin utils/makehex.py
 	$(PYTHON) utils/makehex.py $< 32768 > $@
 
@@ -118,12 +122,12 @@ bin/freertos_demo/firmware.elf: $(FREERTOS_DEMO_FW_OBJS) fw/freertos_demo/sectio
 
 bin/%.o: fw/%.S
 	$(MKDIR) $(dir $@)
-	$(TOOLCHAIN_PREFIX)gcc -c -mabi=ilp32 -march=rv32im$(subst C,c,$(COMPRESSED_ISA)) -o $@ $< \
+	$(TOOLCHAIN_PREFIX)gcc -c -mabi=ilp32 -march=rv32im$(subst C,c,$(COMPRESSED_ISA)) -MMD -o $@ $< \
 		-Ifw/freertos_demo
 
 bin/%.o: fw/%.c
 	$(MKDIR) $(dir $@)
-	$(TOOLCHAIN_PREFIX)gcc -c -mabi=ilp32 -march=rv32i$(subst C,c,$(COMPRESSED_ISA)) -o $@ $< \
+	$(TOOLCHAIN_PREFIX)gcc -c -mabi=ilp32 -march=rv32i$(subst C,c,$(COMPRESSED_ISA)) -MMD -o $@ $< \
 		-Os --std=c99 $(GCC_WARNS) -ffreestanding -nostdlib \
 		-Ifw/freertos_demo/FreeRTOS-Kernel/include -Ifw/freertos_demo \
 		-Ifw/freertos_demo/FreeRTOS-Kernel/portable/GCC/RISC-V
@@ -137,6 +141,8 @@ bin/test/tests/%.o: fw/test/tests/%.S fw/test/tests/riscv_test.h fw/test/tests/t
 # 	gawk '/^-+$$/ { y=tolower(x); gsub("[^a-z0-9]+", "-", y); gsub("-$$", "", y); printf("- [%s](#%s)\n", x, y); } { x=$$0; }' README.md
 
 clean:
+	rm -vrf $(FIRMWARE_OBJS) $(TEST_OBJS) $(FREERTOS_DEMO_FW_OBJS) $(DEPS)
+	rm -vrf bin
 	rm -vrf \
 		tb/test/testbench.vvp \
 		tb/test/testbench_axi.vvp \
@@ -151,7 +157,5 @@ clean:
 		tb/test/wlft* \
 		tb/test/modelsim.ini \
 		tb/test/rtl_work
-	rm -vrf $(FIRMWARE_OBJS) $(TEST_OBJS) $(FREERTOS_DEMO_FW_OBJS)
-	rm -vrf bin
 
 .PHONY: test test_vcd test_axi test_axi_vcd test_wb test_wb_vcd fw/test fw/freertos_demo clean

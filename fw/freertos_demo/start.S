@@ -18,14 +18,15 @@
 .global clear_bits_custom_irq_pend
 
 .global freertos_risc_v_trap_handler
-.global freertos_risc_v_exception_handler
-.global freertos_risc_v_interrupt_handler
-.global freertos_risc_v_mtimer_interrupt_handler
 
 .section .text.reset_vec
 reset_vec:
 	// no more than 16 bytes here !
 	j start
+
+.section .text.trap_vec
+trap_vec:
+	j freertos_risc_v_trap_handler
 
 .section .text
 
@@ -47,20 +48,8 @@ clear_bits_custom_irq_pend:
  **********************************/
 
 start:
-	// Enable external interrupt
-	lui x1, %hi(0x800)
-	addi x1, x1, %lo(0x800)
-	csrw mie, x1
-
-	// Enable all external interrupts
-	addi x1, zero, -1		// x1 = 0xffff_ffff
-	csrw csr_custom_irq_mask, x1
-
-	// wait irq
-	wfi
-
-	// global enable IRQ handling
-	csrwi mstatus, 8		// mie = 1
+	/* Disable global interrupt. */
+	csrci mstatus, 8
 
 	/* zero-initialize all registers */
 	addi x1, zero, 0
@@ -95,7 +84,16 @@ start:
 	addi x30, zero, 0
 	addi x31, zero, 0
 
-	// TODO: jump main
+	/* Initialize stack pointer. */
+	la sp, __freertos_irq_stack_top
 
-	/* trap */
+	/* Initialize global pointer */
+	# la gp, __global_pointer
+
+	# call __libc_init_array
+
+	/* Enable global interrupt. */
+	csrsi mstatus, 8
+
+	jal main
 	ebreak

@@ -177,17 +177,6 @@ void vApplicationTickHook( void )
 }
 /*-----------------------------------------------------------*/
 
-void vPortSetupTimerInterrupt( void )
-{
-extern void SystemSetupSystick(uint32_t tickRateHz, uint32_t intPriority );
-
-	/* No CLINT so use the LPIT (Low Power Interrupt Timer) to generate the tick
-	interrupt. */
-	// CLOCK_SetIpSrc( kCLOCK_Lpit0, kCLOCK_IpSrcFircAsync );
-	// SystemSetupSystick( configTICK_RATE_HZ, configKERNEL_INTERRUPT_PRIORITY - 1 );
-}
-/*-----------------------------------------------------------*/
-
 // void LPIT0_IRQHandler( void )
 // {
 // BaseType_t xTaskIncrementTick( void );

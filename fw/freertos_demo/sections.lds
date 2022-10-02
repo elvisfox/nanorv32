@@ -7,13 +7,14 @@ binary, for any purpose, commercial or non-commercial, and by any
 means.
 */
 
-HEAP_SIZE	= 0x1000;
-STACK_SIZE	= 0x1000;
+MEM_OFFSET		= 0x00000000;
+TOTAL_MEM_SIZE	= 0x00020000;
+MIN_STACK_SIZE	= 0x200;
+
+__freertos_irq_stack_top = MEM_OFFSET + TOTAL_MEM_SIZE;
 
 MEMORY {
-	/* the memory in the testbench is 128k in size;
-	 * set LENGTH=96k and leave at least 32k for stack */
-	mem : ORIGIN = 0x00000000, LENGTH = 0x00020000
+	mem : ORIGIN = MEM_OFFSET, LENGTH = TOTAL_MEM_SIZE
 }
 
 SECTIONS {
@@ -21,30 +22,21 @@ SECTIONS {
 		. = 0x000000;
 		*(.text.reset_vec);
 		. = 0x000010;
+		*(.text.trap_vec);
+		bin/freertos_demo/start.o(.text);
 		*(.text.freertos_risc_v_trap_handler);
 		bin/freertos_demo/FreeRTOS-Kernel/portable/GCC/RISC-V/portASM.o(*);
-		bin/freertos_demo/start.o(.text);
 		*(.text);
 		*(*);
 		end = .;
 		. = ALIGN(4);
 	} > mem
 
-	.heap :
-	{
-		. = ALIGN(8);
-		/* __heap_start = .; */
-		. += HEAP_SIZE;
-		/* __heap_end = .; */
-		/* _heap_end = __heap_end; */
-	} > mem
-
 	.stack :
 	{
 		. = ALIGN(16);
 		/* __StackLimit = .; */
-		. += STACK_SIZE;
+		. += MIN_STACK_SIZE;
 		/* __StackTop = .; */
-		__freertos_irq_stack_top = .;
 	} > mem
 }
