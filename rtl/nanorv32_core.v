@@ -867,6 +867,9 @@ module nanorv32_core #(
 		if (instr_rdinstr)  new_ascii_instr = "rdinstr";
 		if (instr_rdinstrh) new_ascii_instr = "rdinstrh";
 
+		if (instr_ecall)	new_ascii_instr = "ecall";
+		if (instr_ebreak)	new_ascii_instr = "ebreak";
+
 		if (instr_mret)		new_ascii_instr = "mret";
 		if (instr_wfi)		new_ascii_instr = "wfi";
 		if (instr_csrrw)	new_ascii_instr = "csrrw";
@@ -1561,15 +1564,15 @@ module nanorv32_core #(
 	reg mtrap;
 	reg mtrap_prev;
 
-	task do_trap(input [3:0] code, input [31:0] mtval_value);
+	task do_trap(input [3:0] code, input set_mtrap, input [31:0] mtval_value);
 		begin
 			if(MACHINE_ISA) begin
-				if(!mtrap || !ENABLE_CSR_CUSTOM_TRAP) begin
+				if(!mtrap || !set_mtrap || !ENABLE_CSR_CUSTOM_TRAP) begin
 					// this task is called from the main state machine
 					// if mem_do_prefetch is 1, we need to complete the instruction fetch first before changing state
 					// this is done outside of this task by setting mem_do_rinst <= mem_do_prefetch
 					if(!mem_do_prefetch || mem_done) begin
-						mtrap <= 1'b1;
+						mtrap <= mtrap | set_mtrap;
 						mtrap_prev <= mtrap;
 						mcause_irq <= 1'b0;
 						mcause_code <= code;
@@ -1596,11 +1599,11 @@ module nanorv32_core #(
 		begin
 			`debug($display("EBREAK OR UNSUPPORTED INSN AT 0x%08x", reg_pc);)
 			case({instr_ecall, instr_ebreak})
-				2'b00: do_trap(4'd2, reg_pc);		// illegal instruction
-				2'b01: do_trap(4'd3, reg_pc);		// breakpoint exception
-				2'b10: do_trap(4'd11, reg_pc);		// environment call
+				2'b00: do_trap(4'd2, 1'b1, reg_pc);		// illegal instruction
+				2'b01: do_trap(4'd3, 1'b1, reg_pc);		// breakpoint exception
+				2'b10: do_trap(4'd11, 1'b0, reg_pc);	// environment call
 				2'b11: begin
-					do_trap(4'hx, reg_pc);		// should never happen
+					do_trap(4'hx, 1'b1, reg_pc);		// should never happen
 					`assert(0)
 				end
 			endcase
@@ -1725,7 +1728,7 @@ module nanorv32_core #(
 						// test misalign
 						if(CATCH_MISALIGN && (COMPRESSED_ISA ? current_pc[0] : |current_pc[1:0])) begin
 							`debug($display("MISALIGNED JUMP: 0x%08x", current_pc);)
-							do_trap(4'd0, current_pc);		// instruction address misaligned
+							do_trap(4'd0, 1'b1, current_pc);		// instruction address misaligned
 							decoder_trigger <= 1'b0;
 							// current_pc = reg_next_pc;
 						end
@@ -1751,7 +1754,7 @@ module nanorv32_core #(
 				reg_next_pc <= current_pc;
 
 				// if(mem_do_rinst && mem_err_misaligned) begin
-				// 	do_trap(4'd0, reg_pc);		// instruction address misaligned
+				// 	do_trap(4'd0, 1'b1, reg_pc);		// instruction address misaligned
 				// 	decoder_trigger <= 1'b0;
 				// end
 
@@ -2131,7 +2134,7 @@ module nanorv32_core #(
 						// test misalign
 						if(CATCH_MISALIGN && 
 						   ((instr_sw && mem_op_addr[1:0] != 0) || (instr_sh && mem_op_addr[0] != 0)) ) begin
-							do_trap(4'd6, mem_op_addr);		// store address misaligned
+							do_trap(4'd6, 1'b1, mem_op_addr);		// store address misaligned
 							case({instr_sw, instr_sh})
 								2'b10:		`debug($display("MISALIGNED SW: 0x%08x", mem_op_addr);)
 								2'b01:		`debug($display("MISALIGNED SH: 0x%08x", mem_op_addr);)
@@ -2160,7 +2163,7 @@ module nanorv32_core #(
 							decoder_pseudo_trigger <= 1;
 						// end
 						// else
-						// 	do_trap(4'd6, reg_op1);		// store address misaligned
+						// 	do_trap(4'd6, 1'b1, reg_op1);		// store address misaligned
 					end
 				end
 			end
@@ -2174,7 +2177,7 @@ module nanorv32_core #(
 						// test misalign
 						if(CATCH_MISALIGN && 
 						   ((instr_lw && mem_op_addr[1:0] != 0) || (instr_lh && mem_op_addr[0] != 0)) ) begin
-							do_trap(4'd4, mem_op_addr);		// load address misaligned
+							do_trap(4'd4, 1'b1, mem_op_addr);		// load address misaligned
 							case({instr_lw, instr_lh})
 								2'b10:		`debug($display("MISALIGNED LW: 0x%08x", mem_op_addr);)
 								2'b01:		`debug($display("MISALIGNED LH: 0x%08x", mem_op_addr);)
@@ -2212,7 +2215,7 @@ module nanorv32_core #(
 							cpu_state <= cpu_state_fetch;
 						// end
 						// else
-						// 	do_trap(4'd4, reg_op1);		// load address misaligned
+						// 	do_trap(4'd4, 1'b1, reg_op1);		// load address misaligned
 					end
 				end
 			end
