@@ -319,6 +319,8 @@ Enables `csr_custom_trap` CSR, which contains bits `mtrap` and `mtrap_prev`.
 the previous value of `mtrap`. `mtrap_prev` is updated with the value of `mtrap` upon an interrupt too. If another
 exception is generated while `mtrap` is 1, the CPU is stalled and `trap` output is set high.
 
+`ecall` instruction does not cause `mtrap` to change and CPU to stall, while `ebreak` does.
+
 Upon `mret` the `mtrap` is updated with the value of `mtrap_prev`. `mtrap_prev` remains unchanged.
 
 If `ENABLE_CSR_CUSTOM_TRAP` is 0, the CPU is never stalled, and the `trap` output is never set high, but a circular
