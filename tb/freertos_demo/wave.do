@@ -2,15 +2,8 @@ onerror {resume}
 quietly WaveActivateNextPane {} 0
 add wave -noupdate -expand -group Testbench /testbench/clk
 add wave -noupdate -expand -group Testbench /testbench/resetn
-add wave -noupdate -expand -group Testbench /testbench/trap
-add wave -noupdate -expand -group Testbench /testbench/trace_valid
-add wave -noupdate -expand -group Testbench /testbench/trace_data
-add wave -noupdate -expand -group Testbench /testbench/trace_file
-add wave -noupdate -expand -group Testbench /testbench/irq
-add wave -noupdate -expand -group Testbench /testbench/count_cycle
-add wave -noupdate -expand -group Testbench /testbench/tests_passed
-add wave -noupdate -expand -group Testbench /testbench/cycle_counter
 add wave -noupdate -expand -group Testbench /testbench/top/nanorv32/core/eoi
+add wave -noupdate -expand -group Testbench /testbench/led
 add wave -noupdate -expand -group {IO bus} /testbench/top/mem_valid
 add wave -noupdate -expand -group {IO bus} /testbench/top/mem_instr
 add wave -noupdate -expand -group {IO bus} /testbench/top/mem_ready
@@ -74,7 +67,7 @@ add wave -noupdate -expand -group Timer -expand /testbench/top/nanorv32/genblk1/
 add wave -noupdate -expand -group Timer -expand /testbench/top/nanorv32/genblk1/timer/cmp_sub
 add wave -noupdate -expand -group Timer -expand /testbench/top/nanorv32/genblk1/timer/cmp
 TreeUpdate [SetDefaultTree]
-WaveRestoreCursors {{Cursor 1} {339991000 ps} 0} {{Cursor 2} {95250410 ps} 0}
+WaveRestoreCursors {{Cursor 1} {339991000 ps} 0} {{Cursor 2} {94094260 ps} 0}
 quietly wave cursor active 2
 configure wave -namecolwidth 279
 configure wave -valuecolwidth 100
@@ -90,4 +83,4 @@ configure wave -griddelta 40
 configure wave -timeline 0
 configure wave -timelineunits us
 update
-WaveRestoreZoom {93854880 ps} {96974460 ps}
+WaveRestoreZoom {1734953840 ps} {4729065590 ps}

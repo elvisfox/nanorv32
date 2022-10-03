@@ -57,21 +57,7 @@ module testbench #(
 	// 	end
 	// end
 
-	// IRQ driver
-	// reg [31:0] irq = 0;
-
-	// reg [15:0] count_cycle = 0;
-	// always @(posedge clk) count_cycle <= resetn ? count_cycle + 1 : 0;
-
-	// always @* begin
-	// 	irq = 0;
-	// 	irq[4] = &count_cycle[12:0];
-	// 	irq[5] = &count_cycle[15:0];
-	// end
-
 	// uut instance
-	// wire tests_passed;
-
 	wire [3:0] led;
 
 	top #(
@@ -82,24 +68,36 @@ module testbench #(
 		.led(led)
 	);
 
-	// Cycle counter
-// 	integer cycle_counter;
-// 	always @(posedge clk) begin
-// 		cycle_counter <= resetn ? cycle_counter + 1 : 0;
-// 		if (resetn && trap) begin
-// `ifndef VERILATOR
-// 			repeat (10) @(posedge clk);
-// `endif
-// 			$display("TRAP after %1d clock cycles", cycle_counter);
-// 			if (tests_passed) begin
-// 				$display("ALL TESTS PASSED.");
-// 				$finish;
-// 			end else begin
-// 				$display("ERROR!");
-// 				if ($test$plusargs("noerror"))
-// 					$finish;
-// 				$stop;
-// 			end
-// 		end
-// 	end
+	// LED monitor
+	reg [3:0] led_prev;
+
+	always @(posedge clk) begin
+		if(~resetn)
+			led_prev <= led;
+		else begin
+			led_prev <= led;
+			if(led_prev[0] ^ led[0]) begin
+				if(!led[0])
+					$display("%0t: LED0 is lit: prvSetupHardware() is called", $time);
+				else
+					$display("%0t: LED0 turned off: this is unexpected", $time);
+			end
+			if(led_prev[1] ^ led[1]) begin
+				if(!led[1])
+					$display("%0t: LED1 is lit: main() reached vTaskStartScheduler()", $time);
+				else
+					$display("%0t: LED1 turned off: this is unexpected", $time);
+			end
+			if(led_prev[2] ^ led[2])
+				$display("%0t: LED2 %0s: prvQueueSendTask() sent a value in the queue", $time,
+					led[2] ? "turned off" : "is lit");
+			if(led_prev[3] ^ led[3])
+				$display("%0t: LED3 %0s: prvQueueReceiveTask() received correct value!", $time,
+					led[3] ? "turned off" : "is lit");
+		end
+
+		// Help Icarus-Verilog to produce messages on console
+		$fflush();
+	end
+
 endmodule

@@ -54,7 +54,7 @@ module top #(
 	// Memory model
 	always @(posedge clk) begin
 		if(~resetn) begin
-			led <= 0;
+			led <= 4'hF;
 			mem_ready <= 1'b0;
 			mem_rdata <= 32'hxxxx_xxxx;
 		end

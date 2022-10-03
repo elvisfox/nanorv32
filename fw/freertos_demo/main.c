@@ -24,48 +24,39 @@
  *
  */
 
-/* FreeRTOS kernel includes. */
-#include <FreeRTOS.h>
-#include <task.h>
+/* Standard includes. */
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
 
-/* Vega includes. */
-// #include "fsl_device_registers.h"
-// #include "fsl_debug_console.h"
-// #include "board.h"
-// #include "pin_mux.h"
-// #include "clock_config.h"
+/* Kernel includes. */
+#include "FreeRTOS.h"
+#include "task.h"
+#include "queue.h"
 
+#define SIMULATION
 
-/******************************************************************************
- * This project provides two demo applications.  A simple blinky style project,
- * and a more comprehensive test and demo application.  The
- * mainCREATE_SIMPLE_BLINKY_DEMO_ONLY setting (defined in this file) is used to
- * select between the two.  The simply blinky demo is implemented and described
- * in main_blinky.c.  The more comprehensive test and demo application is
- * implemented and described in main_full.c.
- *
- * This file implements the code that is not demo specific, including the
- * hardware setup and standard FreeRTOS hook functions.
- *
- * ENSURE TO READ THE DOCUMENTATION PAGE FOR THIS PORT AND DEMO APPLICATION ON
- * THE http://www.FreeRTOS.org WEB SITE FOR FULL INFORMATION ON USING THIS DEMO
- * APPLICATION, AND ITS ASSOCIATE FreeRTOS ARCHITECTURE PORT!
- *
- */
+/* Priorities used by the tasks. */
+#define mainQUEUE_RECEIVE_TASK_PRIORITY		( tskIDLE_PRIORITY + 2 )
+#define	mainQUEUE_SEND_TASK_PRIORITY		( tskIDLE_PRIORITY + 1 )
 
-/* Set mainCREATE_SIMPLE_BLINKY_DEMO_ONLY to one to run the simple blinky demo,
-or 0 to run the more comprehensive test and demo application. */
-#define mainCREATE_SIMPLE_BLINKY_DEMO_ONLY    1
-
-/*
- * main_blinky() is used when mainCREATE_SIMPLE_BLINKY_DEMO_ONLY is set to 1.
- * main_full() is used when mainCREATE_SIMPLE_BLINKY_DEMO_ONLY is set to 0.
- */
-#if mainCREATE_SIMPLE_BLINKY_DEMO_ONLY == 1
-	extern void main_blinky( void );
+/* The rate at which data is sent to the queue.  The 200ms value is converted
+to ticks using the pdMS_TO_TICKS() macro. */
+#ifdef SIMULATION
+#define mainQUEUE_SEND_FREQUENCY_MS			pdMS_TO_TICKS( 3 )
 #else
-	extern void main_full( void );
-#endif /* #if mainCREATE_SIMPLE_BLINKY_DEMO_ONLY == 1 */
+#define mainQUEUE_SEND_FREQUENCY_MS			pdMS_TO_TICKS( 500 )
+#endif
+
+#define LED_PORT							( *(volatile uint32_t *) 0x20000000 )
+
+/* The maximum number items the queue can hold.  The priority of the receiving
+task is above the priority of the sending task, so the receiving task will
+preempt the sending task and remove the queue items each time the sending task
+writes to the queue.  Therefore the queue will never have more than one item in
+it at any time, and even with a queue length of 1, the sending task will never
+find the queue full. */
+#define mainQUEUE_LENGTH					( 1 )
 
 /* Prototypes for the standard FreeRTOS callback/hook functions implemented
 within this file.  See https://www.freertos.org/a00016.html */
@@ -73,9 +64,17 @@ void vApplicationMallocFailedHook( void );
 void vApplicationIdleHook( void );
 void vApplicationStackOverflowHook( TaskHandle_t pxTask, char *pcTaskName );
 void vApplicationTickHook( void );
+void freertos_risc_v_application_interrupt_handler( uint32_t mcause );
 
-/* Prepare hardware to run the demo. */
+/* Prototypes for the local functions */
 static void prvSetupHardware( void );
+static void prvQueueReceiveTask( void *pvParameters );
+static void prvQueueSendTask( void *pvParameters );
+
+/*-----------------------------------------------------------*/
+
+/* The queue used by both tasks. */
+static QueueHandle_t xQueue = NULL;
 
 /*-----------------------------------------------------------*/
 
@@ -83,39 +82,111 @@ void main( void )
 {
 	prvSetupHardware();
 
-	/* The mainCREATE_SIMPLE_BLINKY_DEMO_ONLY setting is described at the top
-	of this file. */
-	#if( mainCREATE_SIMPLE_BLINKY_DEMO_ONLY == 1 )
+	/* Create the queue. */
+	xQueue = xQueueCreate( mainQUEUE_LENGTH, sizeof( uint32_t ) );
+
+	if( xQueue != NULL )
 	{
-		main_blinky();
+		/* Start the two tasks as described in the comments at the top of this
+		file. */
+		xTaskCreate( prvQueueReceiveTask,				/* The function that implements the task. */
+					"Rx", 								/* The text name assigned to the task - for debug only as it is not used by the kernel. */
+					configMINIMAL_STACK_SIZE * 2U, 		/* The size of the stack to allocate to the task. */
+					NULL, 								/* The parameter passed to the task - not used in this case. */
+					mainQUEUE_RECEIVE_TASK_PRIORITY, 	/* The priority assigned to the task. */
+					NULL );								/* The task handle is not required, so NULL is passed. */
+
+		xTaskCreate( prvQueueSendTask, "TX", configMINIMAL_STACK_SIZE * 2U, NULL, mainQUEUE_SEND_TASK_PRIORITY, NULL );
+
+		/* Light LED1 just before the scheduler is started */
+		LED_PORT &= ~0x2;
+
+		/* Start the tasks and timer running. */
+		vTaskStartScheduler();
 	}
-	#else
-	{
-		main_full();
-	}
-	#endif
+
+	/* If all is well, the scheduler will now be running, and the following
+	line will never be reached.  If the following line does execute, then
+	there was insufficient FreeRTOS heap memory available for the Idle and/or
+	timer tasks to be created.  See the memory management section on the
+	FreeRTOS web site for more details on the FreeRTOS heap
+	http://www.freertos.org/a00111.html. */
+	for( ;; );
 }
 /*-----------------------------------------------------------*/
 
 static void prvSetupHardware( void )
 {
-// gpio_pin_config_t mGpioPinConfigStruct;
-
-	/* Init board hardware. */
-	// BOARD_InitPins();
-	// BOARD_BootClockRUN();
-	// BOARD_InitDebugConsole();
-
-	/* For LED. */
-	// mGpioPinConfigStruct.outputLogic = 1U; /* High. */
-	// mGpioPinConfigStruct.pinDirection = kGPIO_DigitalOutput;
-	// GPIO_PinInit( BOARD_LED1_GPIO, BOARD_LED1_GPIO_PIN, &mGpioPinConfigStruct );
+	// Initial LED state: LED0 is lit
+	LED_PORT = 0xE;
 }
 /*-----------------------------------------------------------*/
 
-void vToggleLED( void )
+static void prvQueueSendTask( void *pvParameters )
 {
-	// GPIO_TogglePinsOutput( BOARD_LED1_GPIO, 1U << BOARD_LED1_GPIO_PIN );
+TickType_t xNextWakeTime;
+const unsigned long ulValueToSend = 100UL;
+BaseType_t xReturned;
+
+	/* Remove compiler warning about unused parameter. */
+	( void ) pvParameters;
+
+	/* Initialise xNextWakeTime - this only needs to be done once. */
+	xNextWakeTime = xTaskGetTickCount();
+
+	for( ;; )
+	{
+		/* Place this task in the blocked state until it is time to run again. */
+		vTaskDelayUntil( &xNextWakeTime, mainQUEUE_SEND_FREQUENCY_MS );
+
+		/* This is generally unsafe, but prvQueueReceiveTask is blocked now waiting
+		to receive from queue */
+		LED_PORT ^= 0x4;
+
+		/* Send to the queue - causing the queue receive task to unblock and
+		toggle the LED.  0 is used as the block time so the sending operation
+		will not block - it shouldn't need to block as the queue should always
+		be empty at this point in the code. */
+		xReturned = xQueueSend( xQueue, &ulValueToSend, 0U );
+		configASSERT( xReturned == pdPASS );
+	}
+}
+/*-----------------------------------------------------------*/
+
+static void prvQueueReceiveTask( void *pvParameters )
+{
+unsigned long ulReceivedValue;
+const unsigned long ulExpectedValue = 100UL;
+const char * const pcPassMessage = "Blink\r\n";
+const char * const pcFailMessage = "Unexpected value received\r\n";
+// extern void vToggleLED( void );
+
+	/* Remove compiler warning about unused parameter. */
+	( void ) pvParameters;
+
+	for( ;; )
+	{
+		/* Wait until something arrives in the queue - this task will block
+		indefinitely provided INCLUDE_vTaskSuspend is set to 1 in
+		FreeRTOSConfig.h. */
+		xQueueReceive( xQueue, &ulReceivedValue, portMAX_DELAY );
+
+		/*  To get here something must have been received from the queue, but
+		is it the expected value?  If it is, toggle the LED. */
+		if( ulReceivedValue == ulExpectedValue )
+		{
+			/* This is generally unsafe, but prvQueueSendTask should wait long enough 
+			for the next tick */
+			LED_PORT ^= 0x8;
+
+			configPRINT_STRING( pcPassMessage );
+			ulReceivedValue = 0U;
+		}
+		else
+		{
+			configPRINT_STRING( pcFailMessage );
+		}
+	}
 }
 /*-----------------------------------------------------------*/
 
@@ -167,53 +238,12 @@ void vApplicationStackOverflowHook( TaskHandle_t pxTask, char *pcTaskName )
 
 void vApplicationTickHook( void )
 {
-	/* The tests in the full demo expect some interaction with interrupts. */
-	#if( mainCREATE_SIMPLE_BLINKY_DEMO_ONLY != 1 )
-	{
-		extern void vFullDemoTickHook( void );
-		vFullDemoTickHook();
-	}
-	#endif
+	// User code can be placed here
 }
 /*-----------------------------------------------------------*/
 
-// void LPIT0_IRQHandler( void )
-// {
-// BaseType_t xTaskIncrementTick( void );
-// void vTaskSwitchContext( void );
-
-// #warning requires critical section if interrupt nesting is used.
-
-// 	/* vPortSetupTimerInterrupt() uses LPIT0 to generate the tick interrupt. */
-// 	if( xTaskIncrementTick() != 0 )
-// 	{
-// 		vTaskSwitchContext();
-// 	}
-
-// 	/* Clear LPIT0 interrupt. */
-// 	LPIT0->MSR = 1U;
-// }
-/*-----------------------------------------------------------*/
-
-/* At the time of writing, interrupt nesting is not supported, so do not use
-the default SystemIrqHandler() implementation as that enables interrupts.  A
-version that does not enable interrupts is provided below.  THIS INTERRUPT
-HANDLER IS SPECIFIC TO THE VEGA BOARD WHICH DOES NOT INCLUDE A CLINT! */
 void freertos_risc_v_application_interrupt_handler( uint32_t mcause )
 {
-// uint32_t ulInterruptNumber;
-// typedef void ( * irq_handler_t )( void );
-// extern const irq_handler_t isrTable[];
-
-// 	ulInterruptNumber = mcause & 0x1FUL;
-
-// 	/* Clear pending flag in EVENT unit .*/
-// 	EVENT_UNIT->INTPTPENDCLEAR = ( 1U << ulInterruptNumber );
-
-// 	/* Read back to make sure write finished. */
-// 	(void)(EVENT_UNIT->INTPTPENDCLEAR);
-
-// 	/* Now call the real irq handler for ulInterruptNumber */
-// 	isrTable[ ulInterruptNumber ]();
+	// User code can be placed here
 }
 /*-----------------------------------------------------------*/

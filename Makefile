@@ -27,7 +27,6 @@ FREERTOS_DEMO_FW_OBJS = \
 	bin/freertos_demo/FreeRTOS-Kernel/list.o \
 	bin/freertos_demo/FreeRTOS-Kernel/timers.o \
 	bin/freertos_demo/main.o \
-	bin/freertos_demo/main_blinky.o \
 	bin/freertos_demo/print.o
 DEPS = $(TEST_FW_OBJS:%.o=%.d) $(FREERTOS_DEMO_FW_OBJS:%.o=%.d)
 NANORV32_RTL = \
@@ -74,6 +73,9 @@ test_axi_vcd: tb/test/testbench_axi.vvp bin/test/firmware.memh
 		+trace=$(patsubst %.vvp,%.trace,$<) \
 		+noerror
 
+test_freertos: tb/freertos_demo/testbench.vvp bin/freertos_demo/firmware.memh
+	$(VVP) -N $< +firmware=bin/freertos_demo/firmware.memh
+
 tb/test/testbench.vvp: $(NANORV32_RTL) tb/test/testbench.v tb/test/nanorv32_wrapper.v
 	$(IVERILOG) -o $@ $(subst C,-DCOMPRESSED_ISA,$(COMPRESSED_ISA)) -DFORMAL $^
 	chmod -x $@
@@ -86,6 +88,10 @@ tb/test/testbench_axi.vvp: $(NANORV32_RTL) tb/test/testbench.v tb/test/nanorv32_
 tb/test/testbench_wb.vvp: $(NANORV32_RTL) tb/test/testbench.v tb/test/nanorv32_wrapper_wb.v tb/test/wb_ram.v \
 		rtl/nanorv32_wb.v
 	$(IVERILOG) -o $@ $(subst C,-DCOMPRESSED_ISA,$(COMPRESSED_ISA)) -DFORMAL -DTESTBENCH_WB $^
+	chmod -x $@
+
+tb/freertos_demo/testbench.vvp: $(NANORV32_RTL) tb/freertos_demo/testbench.v tb/freertos_demo/top.v
+	$(IVERILOG) -o $@ $(subst C,-DCOMPRESSED_ISA,$(COMPRESSED_ISA)) -DFORMAL $^
 	chmod -x $@
 
 # testbench_rvf.vvp: testbench.v picorv32.v rvfimon.v
@@ -156,6 +162,11 @@ clean:
 		tb/test/vsim.wlf \
 		tb/test/wlft* \
 		tb/test/modelsim.ini \
-		tb/test/rtl_work
+		tb/test/rtl_work \
+		tb/freertos_demo/testbench.vvp \
+		tb/freertos_demo/vsim.wlf \
+		tb/freertos_demo/wlft* \
+		tb/freertos_demo/modelsim.ini \
+		tb/freertos_demo/rtl_work
 
 .PHONY: test test_vcd test_axi test_axi_vcd test_wb test_wb_vcd fw/test fw/freertos_demo clean

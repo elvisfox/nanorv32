@@ -56,14 +56,35 @@
 
 #define portasmHAS_SIFIVE_CLINT 0
 #define portasmHAS_MTIME 1
+
+// Comment out the following line if ENABLE_CSR_CUSTOM_TRAP = 0 in Verilog RTL
+#define ENABLE_CSR_CUSTOM_TRAP
+
+#ifdef ENABLE_CSR_CUSTOM_TRAP
+#define csr_custom_trap 0x7C2
 #define portasmADDITIONAL_CONTEXT_SIZE 0 /* Must be even number on 32-bit cores. */
+#else
+#define portasmADDITIONAL_CONTEXT_SIZE 2 /* Must be even number on 32-bit cores. */
+#endif
 
 .macro portasmSAVE_ADDITIONAL_REGISTERS
+#ifdef ENABLE_CSR_CUSTOM_TRAP
+	addi sp, sp, -4
+	csrr t0, csr_custom_trap
+	sw t0, 4(sp)	// 0(sp) is used later in order to store mepc (see portContex.h)
+#else
 	/* No additional registers to save, so this macro does nothing. */
-	.endm
+#endif
+.endm
 
 .macro portasmRESTORE_ADDITIONAL_REGISTERS
+#ifdef ENABLE_CSR_CUSTOM_TRAP
+	lw t0, 4(sp)
+	csrw csr_custom_trap, t0
+	addi sp, sp, 4
+#else
 	/* No additional registers to restore, so this macro does nothing. */
-	.endm
+#endif
+.endm
 
 #endif /* __FREERTOS_RISC_V_EXTENSIONS_H__ */
