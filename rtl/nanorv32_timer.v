@@ -65,19 +65,24 @@ module nanorv32_timer(
 	reg			[31:0]				cmp_val[1:0];
 
 	wire signed	[32:0]				cmp_sub[1:0];
-	reg			[1:0]				cmp;
+	reg			[1:0]				cmp_less;
+	reg			[1:1]				cmp_equal;
 
 	assign		cmp_sub[1]			= cnt[1] - cmp_val[1];	// subtraction forces synthesiser to use carry chain
 	assign		cmp_sub[0]			= cnt[0] - cmp_val[0];
 
 	always @(posedge clk) begin
-		if(~resetn)
-			cmp <= 2'b00;
-		else
-			cmp <= {cmp_sub[1][32], cmp_sub[0][32]};
+		if(~resetn) begin
+			cmp_less <= 2'b00;
+			cmp_equal <= 1'b0;
+		end
+		else begin
+			cmp_less <= {cmp_sub[1][32], cmp_sub[0][32]};
+			cmp_equal <= cnt[1] == cmp_val[1];
+		end
 	end
 
-	assign		mtip				= (~|cmp) && ENABLE_MTIMECMP;
+	assign		mtip				= (cmp_equal ? !cmp_less[0] : !cmp_less[1]) && ENABLE_MTIMECMP;
 
 	// I/O interface
 	integer i;
