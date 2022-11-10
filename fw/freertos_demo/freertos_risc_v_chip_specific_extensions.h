@@ -62,16 +62,16 @@
 
 #ifdef ENABLE_CSR_CUSTOM_TRAP
 #define csr_custom_trap 0x7C2
-#define portasmADDITIONAL_CONTEXT_SIZE 0 /* Must be even number on 32-bit cores. */
-#else
 #define portasmADDITIONAL_CONTEXT_SIZE 2 /* Must be even number on 32-bit cores. */
+#else
+#define portasmADDITIONAL_CONTEXT_SIZE 0 /* Must be even number on 32-bit cores. */
 #endif
 
 .macro portasmSAVE_ADDITIONAL_REGISTERS
 #ifdef ENABLE_CSR_CUSTOM_TRAP
-	addi sp, sp, -4
+	addi sp, sp, -(portasmADDITIONAL_CONTEXT_SIZE * portWORD_SIZE)
 	csrr t0, csr_custom_trap
-	sw t0, 4(sp)	// 0(sp) is used later in order to store mepc (see portContex.h)
+	sw t0, 1 * portWORD_SIZE(sp)	// 0(sp) is used later in order to store mepc (see portContext.h)
 #else
 	/* No additional registers to save, so this macro does nothing. */
 #endif
@@ -79,9 +79,9 @@
 
 .macro portasmRESTORE_ADDITIONAL_REGISTERS
 #ifdef ENABLE_CSR_CUSTOM_TRAP
-	lw t0, 4(sp)
+	lw t0, 1 * portWORD_SIZE(sp)
 	csrw csr_custom_trap, t0
-	addi sp, sp, 4
+	addi sp, sp, (portasmADDITIONAL_CONTEXT_SIZE * portWORD_SIZE)
 #else
 	/* No additional registers to restore, so this macro does nothing. */
 #endif
